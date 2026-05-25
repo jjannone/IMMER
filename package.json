@@ -1,0 +1,12 @@
+{
+  "name": "immer-server",
+  "version": "0.1.0",
+  "description": "IMMER local web server — performers join from phones, the Max patch tracks who's danced/played-with whom.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>IMMER</title>
+  <style>
+    :root {
+      --bg:         #111;
+      --fg:         #eee;
+      --muted:      #888;
+      --line:       #2a2a2a;
+      --music:      #ffb84d;
+      --dance:      #6cd0ff;
+      --music-dim:  #5a4226;
+      --dance-dim:  #234556;
+      --warn:       #ff7a7a;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg); color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      overscroll-behavior: none;
+    }
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    header {
+      padding: 14px 18px 6px;
+      display: flex; justify-content: space-between; align-items: baseline;
+      border-bottom: 1px solid var(--line);
+    }
+    header .name  { font-size: 18px; font-weight: 600; }
+    header .small { color: var(--muted); font-size: 12px; }
+
+    main { flex: 1; padding: 14px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* Join screen */
+    .join {
+      flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 18px;
+      max-width: 420px; margin: 0 auto; width: 100%;
+    }
+    .join h1   { margin: 0; font-size: 28px; letter-spacing: 0.04em; }
+    .join p    { color: var(--muted); margin: 0; }
+    .join input {
+      font-size: 22px; padding: 14px 16px; border-radius: 10px;
+      background: #1a1a1a; color: var(--fg); border: 1px solid var(--line);
+      width: 100%;
+    }
+    .join button {
+      font-size: 18px; padding: 14px; border-radius: 10px; border: 0;
+      background: var(--fg); color: var(--bg); font-weight: 600;
+    }
+
+    /* Performance screen */
+    .countdown {
+      text-align: center; font-variant-numeric: tabular-nums;
+      font-size: 64px; font-weight: 200; letter-spacing: 0.02em;
+      padding: 6px 0 2px;
+    }
+    .status   { text-align: center; color: var(--muted); font-size: 13px; }
+
+    .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
+    .btn {
+      padding: 28px 8px; border-radius: 14px; border: 2px solid transparent;
+      font-size: 20px; font-weight: 600; text-align: center; cursor: pointer;
+      transition: transform 0.05s ease;
+      user-select: none;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn.music  { background: var(--music-dim); color: var(--music); border-color: var(--music); }
+    .btn.dance  { background: var(--dance-dim); color: var(--dance); border-color: var(--dance); }
+    .btn.off    { background: #1a1a1a; color: var(--muted); border-color: var(--line); }
+
+    .clear {
+      text-align: center; font-size: 14px; color: var(--muted);
+      padding: 6px; border: 1px dashed var(--line); border-radius: 10px;
+    }
+
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    }
+    .panel h2 {
+      margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); font-weight: 600;
+    }
+    .panel ul { margin: 0; padding: 0; list-style: none; font-size: 15px; }
+    .panel li { padding: 2px 0; }
+    .panel .empty { color: var(--muted); font-style: italic; font-size: 13px; }
+
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .stat-value { font-size: 22px; font-variant-numeric: tabular-nums; }
+    .stat-value.music { color: var(--music); }
+    .stat-value.dance { color: var(--dance); }
+
+    .badge {
+      display: inline-block; padding: 1px 6px; border-radius: 999px;
+      font-size: 10px; margin-left: 6px; vertical-align: middle;
+    }
+    .badge.music { background: var(--music-dim); color: var(--music); }
+    .badge.dance { background: var(--dance-dim); color: var(--dance); }
+    .badge.done  { background: #1a1a1a; color: var(--muted); }
+
+    .waiting { text-align: center; color: var(--muted); padding: 30px 10px; }
+
+    .footer-note {
+      font-size: 11px; color: var(--muted); text-align: center; padding: 10px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="name" id="hdr-name">IMMER</div>
+    <div class="small" id="hdr-conn">connecting…</div>
+  </header>
+
+  <main>
+    <!-- JOIN -->
+    <section class="join" id="screen-join">
+      <h1>IMMER</h1>
+      <p>Enter your name to join the ensemble.</p>
+      <input id="name-input" type="text" inputmode="text" autocomplete="off" autocapitalize="words" placeholder="Your name" />
+      <button id="join-btn">Join</button>
+      <p class="small" id="join-status"></p>
+    </section>
+
+    <!-- PERFORM -->
+    <section id="screen-play" class="hidden">
+      <div class="countdown" id="countdown">--:--</div>
+      <div class="status" id="status-line">waiting for the piece to begin</div>
+
+      <div class="buttons">
+        <div class="btn off" id="btn-music">I'm Playing Music</div>
+        <div class="btn off" id="btn-dance">I'm Dancing</div>
+      </div>
+      <div class="clear" id="btn-idle">tap here to step out (neither)</div>
+
+      <div class="panel">
+        <h2>Haven't played music with</h2>
+        <ul id="list-not-played"><li class="empty">—</li></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Haven't danced with</h2>
+        <ul id="list-not-danced"><li class="empty">—</li></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Still needs a solo</h2>
+        <ul id="list-needs-solo"><li class="empty">—</li></ul>
+      </div>
+
+      <div class="panel stats">
+        <div>
+          <div class="stat-label">Time playing music</div>
+          <div class="stat-value music" id="stat-music">0:00</div>
+        </div>
+        <div>
+          <div class="stat-label">Time dancing</div>
+          <div class="stat-value dance" id="stat-dance">0:00</div>
+        </div>
+      </div>
+
+      <div class="footer-note" id="footer-note"></div>
+    </section>
+  </main>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+let ws         = null;
+let myName     = "";
+let lastSnap   = null;
+let reconnectT = null;
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(proto + "//" + location.host);
+  ws.onopen = () => {
+    $("hdr-conn").textContent = "connected";
+    if (myName) ws.send(JSON.stringify({ type: "join", name: myName }));
+  };
+  ws.onclose = () => {
+    $("hdr-conn").textContent = "reconnecting…";
+    if (reconnectT) clearTimeout(reconnectT);
+    reconnectT = setTimeout(connect, 1500);
+  };
+  ws.onerror = () => { try { ws.close(); } catch (_) {} };
+  ws.onmessage = (e) => {
+    let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
+    if (msg.type === "snapshot") render(msg);
+    else if (msg.type === "joined") {
+      myName = msg.name;
+      try { localStorage.setItem("immer.name", myName); } catch (_) {}
+      $("hdr-name").textContent = myName;
+      $("screen-join").classList.add("hidden");
+      $("screen-play").classList.remove("hidden");
+    }
+    else if (msg.type === "error") {
+      $("join-status").textContent = msg.message || "error";
+    }
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+function fmt(secs) {
+  secs = Math.max(0, Math.floor(secs));
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m + ":" + (s < 10 ? "0" : "") + s;
+}
+
+function render(snap) {
+  lastSnap = snap;
+  // Countdown.
+  const remaining = Math.round((snap.remainingMs || 0) / 1000);
+  $("countdown").textContent = fmt(remaining);
+  $("status-line").textContent =
+    snap.started ? "in progress" :
+    (remaining === 0 && snap.you ? "piece complete" : "waiting for the piece to begin");
+
+  // Role buttons reflect current server-side role.
+  const you  = snap.you || { role: "idle", msInMusic: 0, msInDance: 0,
+                              notDancedWith: [], notPlayedWith: [],
+                              didMusicSolo: false, didDanceSolo: false };
+  const role = you.role;
+  setBtn($("btn-music"), role === "music", "music");
+  setBtn($("btn-dance"), role === "dance", "dance");
+  $("btn-music").classList.toggle("off", role !== "music");
+  $("btn-dance").classList.toggle("off", role !== "dance");
+
+  // Coverage lists.
+  fillList("list-not-played",  you.notPlayedWith);
+  fillList("list-not-danced",  you.notDancedWith);
+
+  // Who still needs a solo — show music & dance side-by-side via badges.
+  const needsList = $("list-needs-solo");
+  needsList.innerHTML = "";
+  const needs = {};
+  (snap.needsMusicSolo || []).forEach(n => { needs[n] = needs[n] || {}; needs[n].music = true; });
+  (snap.needsDanceSolo || []).forEach(n => { needs[n] = needs[n] || {}; needs[n].dance = true; });
+  const keys = Object.keys(needs);
+  if (keys.length === 0) {
+    const li = document.createElement("li"); li.className = "empty";
+    li.textContent = "everyone has soloed";
+    needsList.appendChild(li);
+  } else {
+    keys.forEach(n => {
+      const li = document.createElement("li");
+      li.textContent = n;
+      if (needs[n].music) {
+        const b = document.createElement("span"); b.className = "badge music"; b.textContent = "music"; li.appendChild(b);
+      }
+      if (needs[n].dance) {
+        const b = document.createElement("span"); b.className = "badge dance"; b.textContent = "dance"; li.appendChild(b);
+      }
+      needsList.appendChild(li);
+    });
+  }
+
+  // Stats.
+  $("stat-music").textContent = fmt(you.msInMusic / 1000);
+  $("stat-dance").textContent = fmt(you.msInDance / 1000);
+
+  // Footer roster summary.
+  const c = snap.currently || { music: [], dance: [], idle: [] };
+  $("footer-note").textContent =
+    `now: ${c.music.length} playing · ${c.dance.length} dancing · ${c.idle.length} resting · ${snap.roster.length} total`;
+}
+
+function setBtn(el, active, kind) {
+  if (active) {
+    el.classList.add(kind);
+    el.classList.remove("off");
+  } else {
+    el.classList.remove(kind);
+  }
+}
+
+function fillList(id, names) {
+  const ul = $(id); ul.innerHTML = "";
+  if (!names || names.length === 0) {
+    const li = document.createElement("li"); li.className = "empty";
+    li.textContent = "—";
+    ul.appendChild(li);
+    return;
+  }
+  names.forEach(n => {
+    const li = document.createElement("li"); li.textContent = n; ul.appendChild(li);
+  });
+}
+
+// — wire join screen —
+$("join-btn").addEventListener("click", () => {
+  const name = ($("name-input").value || "").trim();
+  if (!name) { $("join-status").textContent = "name required"; return; }
+  myName = name;
+  send({ type: "join", name });
+});
+$("name-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("join-btn").click();
+});
+
+// — wire role buttons —
+$("btn-music").addEventListener("click", () => send({ type: "role", name: myName, role: "music" }));
+$("btn-dance").addEventListener("click", () => send({ type: "role", name: myName, role: "dance" }));
+$("btn-idle").addEventListener("click",  () => send({ type: "role", name: myName, role: "idle"  }));
+
+// Auto-rejoin if we have a stored name (refresh / brief disconnect).
+try {
+  const stored = localStorage.getItem("immer.name");
+  if (stored) $("name-input").value = stored;
+} catch (_) {}
+
+connect();
+</script>
+</body>
+</html>
