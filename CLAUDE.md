@@ -124,6 +124,131 @@ without affecting any historical state.
 The cellblock renders disconnected performers as `Name *` with role
 `offline` so the conductor can see at a glance who's dropped.
 
+### WebSocket heartbeat is required — silence ≠ alive
+
+`ws.on("close")` only fires when the TCP connection closes *cleanly*. A
+phone in airplane mode, an OS network stack hang, or a kernel-killed
+process leave the server-side socket "open" indefinitely. Without a
+heartbeat the performer remains `connected: true`, `accumulateTime` keeps
+crediting them with role time, and pairings get falsely recorded with
+someone who isn't there.
+
+The pattern in `server.js`:
+
+```js
+ws.isAlive = true;
+ws.on("pong", () => { ws.isAlive = true; });
+
+function heartbeat() {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) { ws.terminate(); return; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch (_) {}
+  });
+}
+setInterval(heartbeat, 15000);
+```
+
+`terminate()` fires the `close` event, which routes through
+`disconnectPerformer` — solo flags / pairings / time totals are preserved
+per the Anna-bug rule. Worst-case phantom detection time is
+2 × the heartbeat interval.
+
+### Duplicate-name join must close the old socket — and order matters
+
+If Alice opens the page on a second device (or refreshes before the old
+socket times out) she'll trigger a second `addPerformer("Alice", newWs)`.
+Without explicit handling the older socket is orphaned: still alive
+server-side, no entry in `sockets`, no broadcasts reaching it. The user
+on phone1 sees the page freeze with no error.
+
+Correct sequence:
+
+```js
+const oldWs = sockets.get(name);
+sockets.set(name, ws);             // overwrite FIRST
+if (oldWs && oldWs !== ws) {
+  try { oldWs.close(); } catch (_) {}   // then close the orphan
+}
+```
+
+**Why overwrite before close:** the old socket's close handler iterates
+`sockets` looking for its own reference. If we close it *before*
+overwriting, that handler finds Alice's entry pointing at the old socket,
+calls `disconnectPerformer("Alice")`, and we've just torpedoed the new
+device's brand-new connection. After the overwrite, the handler iterates,
+sees `sockets["Alice"] === newWs` (not the old one), `goneName` stays
+null, no disconnect happens. The orphan is reaped cleanly.
+
+### Mid-piece config mutations: act, don't silently ignore
+
+`setduration` used to update `cfg.durationMs` but leave the running
+`endsAt` untouched. The conductor twisting the Duration number box
+mid-piece would see nothing happen — a silent ignore that's the same
+class of bug as the Anna disconnect (config-visible value disagrees with
+actual behaviour-driving value).
+
+The current pattern:
+
+```js
+Max.addHandler("setduration", (mins) => {
+  cfg.durationMs = Math.round(mins * 60 * 1000);
+  if (started) {
+    endsAt = startedAt + cfg.durationMs;  // act on the live piece
+    Max.outlet("countdown", Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
+  } else {
+    Max.outlet("countdown", Math.round(cfg.durationMs / 1000));
+  }
+});
+```
+
+For settings that genuinely can't be applied mid-run (like `setport`,
+which would drop every connected client since their `location.host` is
+fixed at page load), **refuse with a status message** rather than
+silently accepting and confusing the user later:
+
+```js
+if (started || countingIn) {
+  Max.outlet("status", `Port change refused — stop the piece first`);
+  return;
+}
+```
+
+The rule: a config mutation either takes effect, or surfaces a refusal.
+Never both-the-display-says-X-and-the-behaviour-says-Y.
+
+### Restart-friendly server lifecycle
+
+`httpServer.listen()` after `.close()` is unreliable across Node versions
+— some allow it, some leave the server un-listenable. Same with `wss` /
+client-socket survival semantics. For any handler that needs to restart
+the server (like `setport`), create **fresh** `http.createServer()` and
+`new WSServer(...)` instances each time:
+
+```js
+let httpServer = null, wss = null;
+
+function startServer() {
+  httpServer = createHttpServer();
+  httpServer.listen(cfg.port, ...);
+  if (WSServer) {
+    wss = new WSServer({ server: httpServer });
+    wss.on("connection", attachWsHandlers);
+  }
+}
+
+function stopServer() {
+  wss && wss.clients.forEach((ws) => { try { ws.terminate(); } catch (_) {} });
+  wss && wss.close(); wss = null;
+  httpServer && httpServer.close(); httpServer = null;
+}
+```
+
+Explicitly terminate clients before closing `wss` — `wss.close()` alone
+doesn't guarantee in-flight client sockets are closed on every Node
+version, and lingering sockets would survive into the next `startServer`
+context where their handlers wouldn't make sense.
+
 ### `node.script` outlet routing
 
 The patch wires `node.script` to a single `[route performer roster countdown

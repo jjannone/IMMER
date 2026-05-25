@@ -94,6 +94,12 @@ let startedAt      = 0;
 let endsAt         = 0;
 let lastTick       = Date.now();
 let tickTimer      = null;
+let heartbeatTimer = null;
+// Heartbeat sweep period. We ping each client every HEARTBEAT_MS; if a
+// client hasn't responded with a pong by the next sweep, we terminate it.
+// Worst-case detection of a phantom (phone in airplane mode, dead OS
+// network stack) is therefore 2 * HEARTBEAT_MS. 15s is a common default.
+const HEARTBEAT_MS = 15000;
 
 // ── ip discovery (for the QR / URL we hand to performers) ──────
 
@@ -149,42 +155,71 @@ function serveStatic(req, res) {
   });
 }
 
-const httpServer = http.createServer((req, res) => {
-  if (req.url === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      ok: true,
-      performers: performers.size,
-      started,
-      remaining: started ? Math.max(0, endsAt - Date.now()) : cfg.durationMs
-    }));
-    return;
-  }
-  serveStatic(req, res);
-});
+// httpServer and wss are recreated on every startServer() call so that
+// `setport` (and any future restart) gets clean Node instances rather than
+// relying on .listen() being callable after .close() — which is unreliable
+// across Node versions.
+let httpServer = null;
+let wss        = null;
 
-// ── websocket server ───────────────────────────────────────────
+function createHttpServer() {
+  return http.createServer((req, res) => {
+    if (req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        performers: performers.size,
+        started,
+        remaining: started ? Math.max(0, endsAt - Date.now()) : cfg.durationMs
+      }));
+      return;
+    }
+    serveStatic(req, res);
+  });
+}
 
-let wss = null;
-if (WSServer) {
-  wss = new WSServer({ server: httpServer });
-  wss.on("connection", (ws) => {
-    ws.on("message", (raw) => {
-      let msg;
-      try { msg = JSON.parse(String(raw)); } catch (_) { return; }
-      handleClientMessage(ws, msg);
-    });
-    ws.on("close", () => {
-      // Find the name attached to this socket and disconnect them. Do NOT
-      // call removePerformer here — that would wipe accumulated time,
-      // pairings, and solo flags. A phone locking its screen for ten
-      // seconds shouldn't cost Anna her two music solos.
-      let goneName = null;
-      sockets.forEach((sock, name) => { if (sock === ws) goneName = name; });
-      if (goneName) disconnectPerformer(goneName);
-    });
-    // Send initial snapshot.
-    sendTo(ws, snapshotFor(null));
+// All per-connection handler wiring, factored out so we can reattach it to
+// a fresh wss instance after a port change.
+function attachWsHandlers(ws) {
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
+  ws.on("message", (raw) => {
+    let msg;
+    try { msg = JSON.parse(String(raw)); } catch (_) { return; }
+    handleClientMessage(ws, msg);
+  });
+  ws.on("close", () => {
+    // Find the name attached to this socket and disconnect them. Do NOT
+    // call removePerformer here — that would wipe accumulated time,
+    // pairings, and solo flags. A phone locking its screen for ten
+    // seconds shouldn't cost Anna her two music solos. (See CLAUDE.md.)
+    //
+    // If this socket was orphaned by a duplicate-name join, it won't
+    // appear in `sockets` (the new socket overwrote the entry) so the
+    // lookup returns null and we correctly don't disconnect the new one.
+    let goneName = null;
+    sockets.forEach((sock, name) => { if (sock === ws) goneName = name; });
+    if (goneName) disconnectPerformer(goneName);
+  });
+  sendTo(ws, snapshotFor(null));
+}
+
+// Phantom-connection sweep: a phone that drops off the network without a
+// graceful close (airplane mode, OS network-stack hang, kernel kill) leaves
+// the server-side socket "open" forever. Without this, accumulateTime
+// would keep crediting time and pairings to a performer who isn't there.
+function heartbeat() {
+  if (!wss) return;
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      // No pong since last sweep → consider it dead. terminate() fires the
+      // close event, which routes through disconnectPerformer — solo flags,
+      // pairings, and time totals are preserved per the Anna-bug rule.
+      try { ws.terminate(); } catch (_) {}
+      return;
+    }
+    ws.isAlive = false;
+    try { ws.ping(); } catch (_) {}
   });
 }
 
@@ -238,9 +273,20 @@ function addPerformer(name, ws) {
     performers.set(name, freshPerformer(name));
     Max.outlet("performer", "add", name);
   }
-  const p = performers.get(name);
+  const p     = performers.get(name);
+  const oldWs = sockets.get(name);
   p.connected = true;
+  // Overwrite the sockets entry BEFORE closing the old socket. Order
+  // matters: the old socket's close handler iterates `sockets` looking for
+  // its own entry — since the entry now points to the new ws, it won't
+  // find itself, and disconnectPerformer is correctly not called.
   sockets.set(name, ws);
+  if (oldWs && oldWs !== ws) {
+    // Someone joined under this name from a second device (or refreshed
+    // before the old socket was reaped). Close the orphan so it stops
+    // hanging in the server with no path back to the user.
+    try { oldWs.close(); } catch (_) {}
+  }
   Max.outlet("performer", "role", name, p.role);
   sendRoster();
   sendCoverage();
@@ -564,24 +610,46 @@ function tick() {
 // ── boot ───────────────────────────────────────────────────────
 
 function startServer() {
+  // Fresh instances every time — required for setport to actually work,
+  // because httpServer.listen() after .close() is not guaranteed across
+  // Node versions.
+  httpServer = createHttpServer();
+  httpServer.on("error", (err) => {
+    Max.post(`HTTP server error: ${err.message}`, "error");
+    Max.outlet("status", `HTTP error: ${err.message}`);
+  });
   httpServer.listen(cfg.port, () => {
     const url = publicUrl();
     Max.post(`IMMER server listening at ${url}`);
     Max.outlet("url", url);
     Max.outlet("status", `Listening on ${url}`);
   });
-  httpServer.on("error", (err) => {
-    Max.post(`HTTP server error: ${err.message}`, "error");
-    Max.outlet("status", `HTTP error: ${err.message}`);
-  });
-  if (tickTimer) clearInterval(tickTimer);
-  tickTimer = setInterval(tick, cfg.tickMs);
+  if (WSServer) {
+    wss = new WSServer({ server: httpServer });
+    wss.on("connection", attachWsHandlers);
+  }
+  if (tickTimer)      clearInterval(tickTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  tickTimer      = setInterval(tick,      cfg.tickMs);
+  heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
 }
 
 function stopServer() {
-  if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
-  if (wss) { try { wss.close(); } catch (_) {} }
-  try { httpServer.close(); } catch (_) {}
+  if (tickTimer)      { clearInterval(tickTimer);      tickTimer = null; }
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+  if (wss) {
+    // Explicitly terminate clients first — wss.close() alone doesn't
+    // guarantee in-flight client sockets are closed on every Node version.
+    // Each terminate() triggers the close event, which preserves state via
+    // disconnectPerformer.
+    wss.clients.forEach((ws) => { try { ws.terminate(); } catch (_) {} });
+    try { wss.close(); } catch (_) {}
+    wss = null;
+  }
+  if (httpServer) {
+    try { httpServer.close(); } catch (_) {}
+    httpServer = null;
+  }
 }
 
 // ── max handlers (called by messages sent to node.script's inlet) ──
@@ -589,7 +657,16 @@ function stopServer() {
 Max.addHandler("setduration", (mins) => {
   const m = Math.max(1, Number(mins) || 0);
   cfg.durationMs = Math.round(m * 60 * 1000);
-  if (!started) Max.outlet("countdown", Math.round(cfg.durationMs / 1000));
+  if (started) {
+    // Mid-piece changes recompute the end time so the conductor isn't
+    // surprised by a silent ignore. Treat new duration as total length:
+    // if the new endsAt is in the past, the piece will end on the next
+    // tick — that's the user's call.
+    endsAt = startedAt + cfg.durationMs;
+    Max.outlet("countdown", Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
+  } else {
+    Max.outlet("countdown", Math.round(cfg.durationMs / 1000));
+  }
   Max.post(`duration set to ${m} min`);
 });
 
@@ -606,6 +683,14 @@ Max.addHandler("setcountin", (secs) => {
 Max.addHandler("setport", (p) => {
   const port = Math.max(1, Math.min(65535, Number(p) || 0));
   if (port === cfg.port) return;
+  if (started || countingIn) {
+    // A restart drops every connected client (their location.host points to
+    // the old port forever — they'd never reconnect). Don't let the
+    // conductor accidentally torpedo a running piece by twitching a number.
+    Max.outlet("status", `Port change refused — stop the piece first`);
+    Max.post("setport refused: piece is running");
+    return;
+  }
   cfg.port = port;
   Max.post(`port set to ${port} — restarting server`);
   stopServer();
