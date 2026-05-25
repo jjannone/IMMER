@@ -53,6 +53,7 @@ const cfg = {
   port:           8080,
   durationMs:     20 * 60 * 1000, // 20 min default
   soloHoldMs:     15 * 1000,      // counts as a "solo" once held alone this long
+  countInMs:      10 * 1000,      // delay between START and the piece actually beginning
   tickMs:         1000
 };
 
@@ -83,11 +84,15 @@ function freshPerformer(name) {
 }
 
 // Performance transport state.
-let started   = false;
-let startedAt = 0;
-let endsAt    = 0;
-let lastTick  = Date.now();
-let tickTimer = null;
+//   countingIn → started → (countdown hits zero) → ended
+// `countingIn` and `started` are mutually exclusive; both false = idle.
+let countingIn     = false;
+let countInEndsAt  = 0;
+let started        = false;
+let startedAt      = 0;
+let endsAt         = 0;
+let lastTick       = Date.now();
+let tickTimer      = null;
 
 // ── ip discovery (for the QR / URL we hand to performers) ──────
 
@@ -197,6 +202,11 @@ function handleClientMessage(ws, msg) {
   else if (msg.type === "leave") {
     const name = String(msg.name || "").trim();
     removePerformer(name);
+  }
+  else if (msg.type === "start") {
+    // Performers can kick off the piece from any device; same code path
+    // as the patch's START button.
+    beginCountIn();
   }
   broadcastSnapshot();
 }
@@ -334,10 +344,14 @@ function buildCoverage() {
 
 function snapshotFor(viewerName) {
   const cov = buildCoverage();
-  const remainingMs = started ? Math.max(0, endsAt - Date.now()) : cfg.durationMs;
+  const remainingMs       = started ? Math.max(0, endsAt - Date.now()) : cfg.durationMs;
+  const countInRemainingMs = countingIn ? Math.max(0, countInEndsAt - Date.now()) : 0;
   const out = {
     type:        "snapshot",
     started,
+    countingIn,
+    countInRemainingMs,
+    countInMs:   cfg.countInMs,
     remainingMs,
     durationMs:  cfg.durationMs,
     soloHoldMs:  cfg.soloHoldMs,
@@ -423,12 +437,22 @@ function fmtMS(ms) {
 
 // ── transport (start / stop / reset) ───────────────────────────
 
-function startPiece() {
-  if (started) return;
-  started   = true;
-  startedAt = Date.now();
-  endsAt    = startedAt + cfg.durationMs;
-  lastTick  = startedAt;
+function beginCountIn() {
+  if (countingIn || started) return;
+  if (cfg.countInMs <= 0) { actuallyStartPiece(); return; }
+  countingIn    = true;
+  countInEndsAt = Date.now() + cfg.countInMs;
+  Max.outlet("status", `Count-in — ${Math.round(cfg.countInMs / 1000)}s`);
+  Max.outlet("countdown", Math.round(cfg.countInMs / 1000));
+  broadcastSnapshot();
+}
+
+function actuallyStartPiece() {
+  countingIn = false;
+  started    = true;
+  startedAt  = Date.now();
+  endsAt     = startedAt + cfg.durationMs;
+  lastTick   = startedAt;
   // Reset role-time + solo accumulators so a fresh run is clean.
   performers.forEach(p => {
     p.role           = ROLES.IDLE;
@@ -449,15 +473,18 @@ function startPiece() {
 }
 
 function stopPiece() {
-  if (!started) return;
-  accumulateTime();
-  started = false;
-  Max.outlet("status", "Stopped");
+  if (!started && !countingIn) return;
+  const wasRunning = started;
+  if (started) accumulateTime();
+  countingIn = false;
+  started    = false;
+  Max.outlet("status", wasRunning ? "Stopped" : "Count-in cancelled");
   broadcastSnapshot();
 }
 
 function resetState() {
-  started = false;
+  countingIn = false;
+  started    = false;
   performers.forEach(p => {
     p.role           = ROLES.IDLE;
     p.msInMusic      = 0;
@@ -479,6 +506,14 @@ function resetState() {
 // ── per-second tick ────────────────────────────────────────────
 
 function tick() {
+  // Count-in phase: drive the countdown down, then roll into the piece.
+  if (countingIn) {
+    const remainingMs = countInEndsAt - Date.now();
+    if (remainingMs <= 0) { actuallyStartPiece(); return; }
+    Max.outlet("countdown", Math.max(0, Math.round(remainingMs / 1000)));
+    broadcastSnapshot(); // count-in is short — push every tick so clients stay in sync
+    return;
+  }
   if (!started) return;
   accumulateTime();
   const remainingMs = endsAt - Date.now();
@@ -537,6 +572,11 @@ Max.addHandler("setsolohold", (secs) => {
   Max.post(`solo-hold threshold set to ${cfg.soloHoldMs/1000}s`);
 });
 
+Max.addHandler("setcountin", (secs) => {
+  cfg.countInMs = Math.max(0, Number(secs) || 0) * 1000;
+  Max.post(`count-in set to ${cfg.countInMs/1000}s`);
+});
+
 Max.addHandler("setport", (p) => {
   const port = Math.max(1, Math.min(65535, Number(p) || 0));
   if (port === cfg.port) return;
@@ -546,7 +586,7 @@ Max.addHandler("setport", (p) => {
   startServer();
 });
 
-Max.addHandler("start",  () => startPiece());
+Max.addHandler("start",  () => beginCountIn());
 Max.addHandler("stop",   () => stopPiece());
 Max.addHandler("reset",  () => resetState());
 

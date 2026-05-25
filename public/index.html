@@ -36,20 +36,55 @@
 
     /* Join screen */
     .join {
-      flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 18px;
-      max-width: 420px; margin: 0 auto; width: 100%;
+      flex: 1; display: flex; flex-direction: column; gap: 14px;
+      max-width: 460px; margin: 0 auto; width: 100%; padding-top: 10px;
     }
-    .join h1   { margin: 0; font-size: 28px; letter-spacing: 0.04em; }
-    .join p    { color: var(--muted); margin: 0; }
+    .join h1   { margin: 0; font-size: 26px; letter-spacing: 0.04em; }
+    .join p    { color: var(--muted); margin: 0; font-size: 13px; }
     .join input {
       font-size: 22px; padding: 14px 16px; border-radius: 10px;
       background: #1a1a1a; color: var(--fg); border: 1px solid var(--line);
       width: 100%;
     }
+    .join .row { display: flex; gap: 10px; }
     .join button {
       font-size: 18px; padding: 14px; border-radius: 10px; border: 0;
-      background: var(--fg); color: var(--bg); font-weight: 600;
+      font-weight: 600; flex: 1; cursor: pointer;
     }
+    .join button.primary { background: var(--fg); color: var(--bg); }
+    .join button.start   {
+      background: #1f3a1f; color: #6cd06c; border: 2px solid #6cd06c;
+    }
+    .join button:disabled { opacity: 0.4; cursor: default; }
+
+    .roster-panel { margin-top: 4px; }
+    .roster-panel h2 {
+      margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); font-weight: 600;
+    }
+    .roster-chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      min-height: 30px; padding: 6px;
+      border: 1px solid var(--line); border-radius: 10px;
+    }
+    .chip {
+      padding: 4px 10px; border-radius: 999px;
+      background: #1a1a1a; border: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .chip.me { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    .roster-empty { color: var(--muted); font-style: italic; font-size: 13px; padding: 4px 8px; }
+
+    .countin-banner {
+      text-align: center; padding: 14px;
+      background: #2a2a1a; border: 1px solid #6cd06c; border-radius: 10px;
+      color: #c8e0c8;
+    }
+    .countin-banner .big {
+      font-size: 48px; font-weight: 200; font-variant-numeric: tabular-nums;
+      color: #6cd06c;
+    }
+    .countin-banner .sub { font-size: 13px; color: var(--muted); }
 
     /* Performance screen */
     .countdown {
@@ -131,8 +166,23 @@
       <h1>IMMER</h1>
       <p>Enter your name to join the ensemble.</p>
       <input id="name-input" type="text" inputmode="text" autocomplete="off" autocapitalize="words" placeholder="Your name" />
-      <button id="join-btn">Join</button>
+      <div class="row">
+        <button id="join-btn" class="primary">Join</button>
+        <button id="join-start-btn" class="start">Start the piece</button>
+      </div>
       <p class="small" id="join-status"></p>
+
+      <div class="roster-panel">
+        <h2>Already joined (<span id="roster-count">0</span>)</h2>
+        <div class="roster-chips" id="roster-chips">
+          <div class="roster-empty">no one yet — be the first</div>
+        </div>
+      </div>
+
+      <div class="countin-banner hidden" id="join-countin">
+        <div class="sub">starting in</div>
+        <div class="big" id="join-countin-num">--</div>
+      </div>
     </section>
 
     <!-- PERFORM -->
@@ -140,6 +190,11 @@
       <div class="countdown" id="countdown">--:--</div>
       <div class="status" id="status-line">waiting for the piece to begin</div>
       <div class="since" id="since-line">in <strong id="since-role">idle</strong> for <span class="num" id="since-time">0:00</span></div>
+
+      <div class="countin-banner hidden" id="play-countin">
+        <div class="sub">starting in</div>
+        <div class="big" id="play-countin-num">--</div>
+      </div>
 
       <div class="buttons">
         <div class="btn off" id="btn-music">I'm Playing Music</div>
@@ -235,10 +290,27 @@ function fmt(secs) {
 
 function render(snap) {
   lastSnap = snap;
-  // Countdown.
-  const remaining = Math.round((snap.remainingMs || 0) / 1000);
+  // Roster — visible on join screen, regardless of whether viewer has joined.
+  renderRoster(snap.roster || []);
+  // Count-in banners shown on both screens whenever the count-in is active.
+  const inCountIn = !!snap.countingIn;
+  const ciSecs    = Math.max(0, Math.round((snap.countInRemainingMs || 0) / 1000));
+  $("join-countin").classList.toggle("hidden", !inCountIn);
+  $("play-countin").classList.toggle("hidden", !inCountIn);
+  if (inCountIn) {
+    $("join-countin-num").textContent = ciSecs;
+    $("play-countin-num").textContent = ciSecs;
+  }
+  // Start button on the join screen — disabled while running or counting in.
+  $("join-start-btn").disabled = snap.started || inCountIn;
+
+  // Countdown — count-in remaining if counting in, otherwise piece time.
+  const remaining = inCountIn
+    ? ciSecs
+    : Math.round((snap.remainingMs || 0) / 1000);
   $("countdown").textContent = fmt(remaining);
   $("status-line").textContent =
+    inCountIn ? "count-in" :
     snap.started ? "in progress" :
     (remaining === 0 && snap.you ? "piece complete" : "waiting for the piece to begin");
 
@@ -307,6 +379,25 @@ function setBtn(el, active, kind) {
   }
 }
 
+function renderRoster(names) {
+  $("roster-count").textContent = names.length;
+  const wrap = $("roster-chips");
+  wrap.innerHTML = "";
+  if (names.length === 0) {
+    const d = document.createElement("div");
+    d.className = "roster-empty";
+    d.textContent = "no one yet — be the first";
+    wrap.appendChild(d);
+    return;
+  }
+  names.forEach(n => {
+    const c = document.createElement("span");
+    c.className = "chip" + (n === myName ? " me" : "");
+    c.textContent = n;
+    wrap.appendChild(c);
+  });
+}
+
 function renderSince() {
   const elapsed = sinceMsAtSnap + (Date.now() - sinceSnapLocal);
   $("since-time").textContent = fmt(elapsed / 1000);
@@ -342,6 +433,9 @@ $("join-btn").addEventListener("click", () => {
 $("name-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("join-btn").click();
 });
+
+// Start button on the join screen — fires the count-in from any device.
+$("join-start-btn").addEventListener("click", () => send({ type: "start" }));
 
 // — wire role buttons —
 $("btn-music").addEventListener("click", () => send({ type: "role", name: myName, role: "music" }));
