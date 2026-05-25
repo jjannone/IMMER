@@ -90,6 +90,40 @@ where a wrong name is silently accepted and quietly ignored.
 
 ## Project-specific gotchas
 
+### "Disconnect" is not "leave" — keep performer records across socket drops
+
+A phone disconnect is **not** the same event as a performer leaving the
+ensemble. Screen lock, tab background, brief wifi blip, or a fresh reload
+of the page all close the WebSocket — but the performer is still in the
+piece. Their accumulated time, pairings, and completed-solo flags must
+survive.
+
+The bug this rule prevents (observed in a real run): Anna soloed twice,
+her phone locked momentarily, the WebSocket closed and the server called
+`removePerformer()` which deleted her record. On auto-rejoin she got a
+fresh record — `didMusicSolo` reset to `false`, and "still needs a solo"
+showed her name again. She soloed twice more, then locked her screen
+again, then the cycle repeated.
+
+**Correct lifecycle:**
+
+| Event                              | Action                          |
+|------------------------------------|---------------------------------|
+| WebSocket `close` (drop)           | `disconnectPerformer(name)` — drop the socket, set `connected = false`, force role to `idle`, but keep the full record. |
+| Client sends explicit `{type:"leave"}` | `removePerformer(name)` — fully delete. (Note: the current web client never sends this.) |
+| Patch `clear` command              | `performers.clear()` — full wipe of everyone, used between pieces. |
+| Reconnect with the same name       | `addPerformer` finds existing record, sets `connected = true`, attaches new socket. State preserved. |
+
+**Why force role to idle on disconnect (rather than leaving them in their
+last role):** the `accumulateTime()` loop ticks every second and keeps
+adding `dt` to whichever role each performer is in. If Anna disconnects
+while dancing, leaving her role as `dance` would keep crediting her with
+dance time she isn't actually performing. Idle stops the accumulation
+without affecting any historical state.
+
+The cellblock renders disconnected performers as `Name *` with role
+`offline` so the conductor can see at a glance who's dropped.
+
 ### `node.script` outlet routing
 
 The patch wires `node.script` to a single `[route performer roster countdown

@@ -71,6 +71,7 @@ function freshPerformer(name) {
   return {
     name,
     role: ROLES.IDLE,
+    connected: false,
     msInMusic: 0,
     msInDance: 0,
     lastRoleChange: Date.now(),
@@ -174,10 +175,13 @@ if (WSServer) {
       handleClientMessage(ws, msg);
     });
     ws.on("close", () => {
-      // Find the name attached to this socket and unregister.
+      // Find the name attached to this socket and disconnect them. Do NOT
+      // call removePerformer here — that would wipe accumulated time,
+      // pairings, and solo flags. A phone locking its screen for ten
+      // seconds shouldn't cost Anna her two music solos.
       let goneName = null;
       sockets.forEach((sock, name) => { if (sock === ws) goneName = name; });
-      if (goneName) removePerformer(goneName);
+      if (goneName) disconnectPerformer(goneName);
     });
     // Send initial snapshot.
     sendTo(ws, snapshotFor(null));
@@ -226,17 +230,39 @@ function broadcastSnapshot() {
 // ── state mutations ────────────────────────────────────────────
 
 function addPerformer(name, ws) {
-  // If the same name reconnects, keep their accumulated stats.
+  // If the same name reconnects, keep their accumulated stats — that's the
+  // whole point of using the name as a stable identity key. A WebSocket
+  // disconnect (phone lock, tab background, wifi blip) must not cost
+  // anyone their pairings, time totals, or completed-solo flags.
   if (!performers.has(name)) {
     performers.set(name, freshPerformer(name));
     Max.outlet("performer", "add", name);
   }
+  const p = performers.get(name);
+  p.connected = true;
   sockets.set(name, ws);
-  Max.outlet("performer", "role", name, performers.get(name).role);
+  Max.outlet("performer", "role", name, p.role);
   sendRoster();
   sendCoverage();
 }
 
+// Called when a WebSocket closes. Preserves the performer record (and all
+// accumulated state); just drops the socket and forces the role to idle so
+// we don't keep ticking time-in-role at someone whose phone is asleep.
+function disconnectPerformer(name) {
+  const p = performers.get(name);
+  if (!p) return;
+  if (started) accumulateTime(); // bank any time spent in the old role first
+  p.role           = ROLES.IDLE;
+  p.lastRoleChange = Date.now();
+  p.connected      = false;
+  sockets.delete(name);
+  Max.outlet("performer", "role", name, p.role);
+  sendCoverage();
+}
+
+// Explicit removal — used by the `clear` patch command and by clients that
+// send an explicit {type:"leave"} message. Wipes the record entirely.
 function removePerformer(name) {
   if (!performers.has(name)) return;
   performers.delete(name);
@@ -414,8 +440,8 @@ function pushCellblock() {
   names.forEach((n, i) => {
     const p = performers.get(n);
     Max.outlet("cell", "set", 0, i + 1, String(i + 1));
-    Max.outlet("cell", "set", 1, i + 1, n);
-    Max.outlet("cell", "set", 2, i + 1, p.role);
+    Max.outlet("cell", "set", 1, i + 1, p.connected ? n : n + " *");
+    Max.outlet("cell", "set", 2, i + 1, p.connected ? p.role : "offline");
     Max.outlet("cell", "set", 3, i + 1, fmtMS(now - p.lastRoleChange));
     Max.outlet("cell", "set", 4, i + 1, fmtMS(p.msInMusic));
     Max.outlet("cell", "set", 5, i + 1, fmtMS(p.msInDance));
