@@ -59,6 +59,15 @@
     }
     .status   { text-align: center; color: var(--muted); font-size: 13px; }
 
+    .since {
+      text-align: center; font-size: 14px; padding: 2px 0 6px;
+      font-variant-numeric: tabular-nums; color: var(--muted);
+    }
+    .since strong { font-weight: 600; }
+    .since.music strong  { color: var(--music); }
+    .since.dance strong  { color: var(--dance); }
+    .since .num { font-variant-numeric: tabular-nums; }
+
     .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
     .btn {
       padding: 28px 8px; border-radius: 14px; border: 2px solid transparent;
@@ -130,6 +139,7 @@
     <section id="screen-play" class="hidden">
       <div class="countdown" id="countdown">--:--</div>
       <div class="status" id="status-line">waiting for the piece to begin</div>
+      <div class="since" id="since-line">in <strong id="since-role">idle</strong> for <span class="num" id="since-time">0:00</span></div>
 
       <div class="buttons">
         <div class="btn off" id="btn-music">I'm Playing Music</div>
@@ -176,6 +186,12 @@ let ws         = null;
 let myName     = "";
 let lastSnap   = null;
 let reconnectT = null;
+// "Time in current role" tracking. Pin the server-reported value at the
+// moment the snapshot lands and tick locally so the display updates
+// smoothly between snapshots (~2s apart).
+let sinceRole       = "idle";
+let sinceMsAtSnap   = 0;
+let sinceSnapLocal  = Date.now();
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -228,9 +244,16 @@ function render(snap) {
 
   // Role buttons reflect current server-side role.
   const you  = snap.you || { role: "idle", msInMusic: 0, msInDance: 0,
+                              msSinceChange: 0,
                               notDancedWith: [], notPlayedWith: [],
                               didMusicSolo: false, didDanceSolo: false };
   const role = you.role;
+
+  // Pin the "in <role> for <m:ss>" counter so it ticks locally between snapshots.
+  sinceRole      = role;
+  sinceMsAtSnap  = you.msSinceChange || 0;
+  sinceSnapLocal = Date.now();
+  renderSince();
   setBtn($("btn-music"), role === "music", "music");
   setBtn($("btn-dance"), role === "dance", "dance");
   $("btn-music").classList.toggle("off", role !== "music");
@@ -283,6 +306,18 @@ function setBtn(el, active, kind) {
     el.classList.remove(kind);
   }
 }
+
+function renderSince() {
+  const elapsed = sinceMsAtSnap + (Date.now() - sinceSnapLocal);
+  $("since-time").textContent = fmt(elapsed / 1000);
+  $("since-role").textContent = sinceRole;
+  const el = $("since-line");
+  el.classList.remove("music", "dance");
+  if (sinceRole === "music") el.classList.add("music");
+  if (sinceRole === "dance") el.classList.add("dance");
+}
+
+setInterval(renderSince, 1000);
 
 function fillList(id, names) {
   const ul = $(id); ul.innerHTML = "";

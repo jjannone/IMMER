@@ -311,18 +311,20 @@ function allNames() { return Array.from(performers.keys()); }
 
 function buildCoverage() {
   const names = allNames();
+  const now   = Date.now();
   const perPerformer = {};
   names.forEach(n => {
     const p = performers.get(n);
     const others = names.filter(x => x !== n);
     perPerformer[n] = {
-      role:           p.role,
-      msInMusic:      p.msInMusic,
-      msInDance:      p.msInDance,
-      notDancedWith:  others.filter(x => !p.dancedWith.has(x)),
-      notPlayedWith:  others.filter(x => !p.playedWith.has(x)),
-      didMusicSolo:   p.didMusicSolo,
-      didDanceSolo:   p.didDanceSolo
+      role:             p.role,
+      msInMusic:        p.msInMusic,
+      msInDance:        p.msInDance,
+      msSinceChange:    Math.max(0, now - p.lastRoleChange),
+      notDancedWith:    others.filter(x => !p.dancedWith.has(x)),
+      notPlayedWith:    others.filter(x => !p.playedWith.has(x)),
+      didMusicSolo:     p.didMusicSolo,
+      didDanceSolo:     p.didDanceSolo
     };
   });
   const needsMusicSolo = names.filter(n => !performers.get(n).didMusicSolo);
@@ -368,12 +370,13 @@ function sendCoverage() {
 
 // Render the roster as direct jit.cellblock messages, so the patch can
 // route them straight to a [jit.cellblock] with no scripting glue.
-//   columns: # | Name | Role | Music | Dance | Played-w | Danced-w | Solo
+//   columns: # | Name | Role | Since | Music | Dance | Played-w | Danced-w | Solo
 function pushCellblock() {
   const names = allNames();
+  const now   = Date.now();
   const rows  = names.length + 1; // +1 header
   Max.outlet("cell", "rows",  rows);
-  Max.outlet("cell", "cols",  8);
+  Max.outlet("cell", "cols",  9);
   Max.outlet("cell", "clear");
   Max.outlet("cell", "col", 0, "width",  28);
   Max.outlet("cell", "col", 1, "width", 110);
@@ -382,28 +385,31 @@ function pushCellblock() {
   Max.outlet("cell", "col", 4, "width",  56);
   Max.outlet("cell", "col", 5, "width",  56);
   Max.outlet("cell", "col", 6, "width",  56);
-  Max.outlet("cell", "col", 7, "width",  46);
+  Max.outlet("cell", "col", 7, "width",  56);
+  Max.outlet("cell", "col", 8, "width",  46);
   Max.outlet("cell", "set", 0, 0, "#");
   Max.outlet("cell", "set", 1, 0, "Name");
   Max.outlet("cell", "set", 2, 0, "Role");
-  Max.outlet("cell", "set", 3, 0, "Music");
-  Max.outlet("cell", "set", 4, 0, "Dance");
-  Max.outlet("cell", "set", 5, 0, "Played");
-  Max.outlet("cell", "set", 6, 0, "Danced");
-  Max.outlet("cell", "set", 7, 0, "Solo");
+  Max.outlet("cell", "set", 3, 0, "Since");
+  Max.outlet("cell", "set", 4, 0, "Music");
+  Max.outlet("cell", "set", 5, 0, "Dance");
+  Max.outlet("cell", "set", 6, 0, "Played");
+  Max.outlet("cell", "set", 7, 0, "Danced");
+  Max.outlet("cell", "set", 8, 0, "Solo");
   const N = names.length - 1;
   names.forEach((n, i) => {
     const p = performers.get(n);
     Max.outlet("cell", "set", 0, i + 1, String(i + 1));
     Max.outlet("cell", "set", 1, i + 1, n);
     Max.outlet("cell", "set", 2, i + 1, p.role);
-    Max.outlet("cell", "set", 3, i + 1, fmtMS(p.msInMusic));
-    Max.outlet("cell", "set", 4, i + 1, fmtMS(p.msInDance));
+    Max.outlet("cell", "set", 3, i + 1, fmtMS(now - p.lastRoleChange));
+    Max.outlet("cell", "set", 4, i + 1, fmtMS(p.msInMusic));
+    Max.outlet("cell", "set", 5, i + 1, fmtMS(p.msInDance));
     // "Played" = how many of the other performers they've played music with.
-    Max.outlet("cell", "set", 5, i + 1, `${p.playedWith.size}/${Math.max(0,N)}`);
-    Max.outlet("cell", "set", 6, i + 1, `${p.dancedWith.size}/${Math.max(0,N)}`);
+    Max.outlet("cell", "set", 6, i + 1, `${p.playedWith.size}/${Math.max(0,N)}`);
+    Max.outlet("cell", "set", 7, i + 1, `${p.dancedWith.size}/${Math.max(0,N)}`);
     const solo = (p.didMusicSolo ? "M" : "·") + (p.didDanceSolo ? "D" : "·");
-    Max.outlet("cell", "set", 7, i + 1, solo);
+    Max.outlet("cell", "set", 8, i + 1, solo);
   });
   Max.outlet("cell", "count", names.length);
 }
@@ -484,8 +490,11 @@ function tick() {
     broadcastSnapshot();
     return;
   }
+  // Every tick: repaint the patch cellblock so the "Since" / time columns
+  // stay live even when no role events fire. Clients update msInRole locally
+  // and only need a fresh snapshot every couple of seconds.
+  pushCellblock();
   if ((Date.now() - startedAt) % 2000 < cfg.tickMs) {
-    // Push a snapshot to clients every ~2s so coverage stays fresh.
     broadcastSnapshot();
     sendCoverage();
   }
