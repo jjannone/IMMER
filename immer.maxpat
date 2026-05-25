@@ -478,7 +478,7 @@
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 1030.0, 320.0, 130.0, 22.0 ],
-					"text" : "print SERVER"
+					"text" : "print SERVER @popup 1"
 				}
 			},
 
