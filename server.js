@@ -150,7 +150,16 @@ function serveStatic(req, res) {
   fs.readFile(full, (err, buf) => {
     if (err) { res.writeHead(404); res.end("not found"); return; }
     const ext = path.extname(full).toLowerCase();
-    res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+    // Strong no-cache: every page load must hit the server and the user
+    // must re-enter their name. Otherwise iOS Safari et al. will gleefully
+    // serve a stale index.html (or even a stale JS bundle) from disk and
+    // different phones end up rendering different versions of the lobby.
+    res.writeHead(200, {
+      "Content-Type":  MIME[ext] || "application/octet-stream",
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      "Pragma":        "no-cache",
+      "Expires":       "0"
+    });
     res.end(buf);
   });
 }
@@ -256,9 +265,16 @@ function sendTo(ws, obj) {
 
 function broadcastSnapshot() {
   if (!wss) return;
-  performers.forEach((rec, name) => {
-    const ws = sockets.get(name);
-    if (ws) sendTo(ws, snapshotFor(name));
+  // Iterate wss.clients (NOT just the `performers` map) so that connected
+  // lobby viewers — clients who've opened the page but haven't joined yet —
+  // also receive roster / count-in / start snapshots. Otherwise an unjoined
+  // phone sees a stale roster forever until it joins. The personalized
+  // "you" field is filled in only for sockets that map back to a performer.
+  const wsToName = new Map();
+  sockets.forEach((ws, name) => wsToName.set(ws, name));
+  wss.clients.forEach((ws) => {
+    if (ws.readyState !== 1) return;
+    sendTo(ws, snapshotFor(wsToName.get(ws) || null));
   });
 }
 

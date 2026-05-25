@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>IMMER</title>
   <style>
     :root {
@@ -271,7 +274,6 @@ function connect() {
     else if (msg.type === "joined") {
       myName    = msg.name;
       iAmJoined = true;
-      try { localStorage.setItem("immer.name", myName); } catch (_) {}
       $("hdr-name").textContent = myName;
       // Joining doesn't navigate away — performers stay on the lobby until
       // the piece itself starts. Just update the lobby UI to reflect status.
@@ -478,11 +480,12 @@ $("btn-music").addEventListener("click", () => send({ type: "role", name: myName
 $("btn-dance").addEventListener("click", () => send({ type: "role", name: myName, role: "dance" }));
 $("btn-idle").addEventListener("click",  () => send({ type: "role", name: myName, role: "idle"  }));
 
-// Auto-rejoin if we have a stored name (refresh / brief disconnect).
-try {
-  const stored = localStorage.getItem("immer.name");
-  if (stored) $("name-input").value = stored;
-} catch (_) {}
+// No localStorage / sessionStorage: a fresh page load means a fresh name.
+// `myName` lives only in this script's memory so the WS-reconnect path
+// (phone sleeps briefly, socket drops) can still auto-rejoin without
+// asking the user to retype. Hard refresh = clean slate, by design.
+// Also defensively clear any pre-existing entry from older builds:
+try { localStorage.removeItem("immer.name"); } catch (_) {}
 
 connect();
 </script>

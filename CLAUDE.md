@@ -249,6 +249,56 @@ doesn't guarantee in-flight client sockets are closed on every Node
 version, and lingering sockets would survive into the next `startServer`
 context where their handlers wouldn't make sense.
 
+### Broadcast to `wss.clients`, not just `performers`
+
+`broadcastSnapshot` originally iterated the `performers` map and sent
+updates only to sockets associated with joined performers. Unjoined
+lobby viewers — anyone who had opened the page but not yet typed a name
+— received exactly one snapshot at connect time and then nothing else.
+Result: different phones rendered different "Already joined" lists
+depending on when they happened to load the page, with no way to recover
+short of re-joining.
+
+The rule: state changes that affect everyone (roster grows/shrinks,
+count-in fires, piece starts/ends) must reach every connected socket,
+not just authenticated ones. Iterate `wss.clients`; look up the
+personalized `you` data via a reverse socket→name map for whichever
+clients have one.
+
+```js
+const wsToName = new Map();
+sockets.forEach((ws, name) => wsToName.set(ws, name));
+wss.clients.forEach((ws) => {
+  if (ws.readyState !== 1) return;
+  sendTo(ws, snapshotFor(wsToName.get(ws) || null));
+});
+```
+
+### Fresh page load = fresh client state (no `localStorage`)
+
+The client deliberately does NOT persist anything across page loads. A
+hard refresh is the canonical "reset me" gesture — the user must re-enter
+their name, and the only state that survives is whatever the server
+holds. This avoids two failure modes:
+
+1. **Phones rendering different "Already joined" lists** because each one
+   prefilled its own remembered name and joined under it before others
+   caught up.
+2. **Stale name surviving a CLEAR**. If the conductor hits CLEAR mid-
+   rehearsal and a phone has the old name in `localStorage`, the auto-
+   prefill puts it back even though the server intends a wipe.
+
+`myName` lives only in the script's memory (not storage) so that
+WebSocket reconnects within the same page session — phone briefly sleeps,
+socket drops — can still auto-rejoin without prompting. The moment the
+user closes the tab or hard-refreshes, that goes away.
+
+The HTML is also served with strict no-cache headers (`Cache-Control:
+no-store, no-cache, must-revalidate`) AND a redundant `<meta>` equivalent
+so iOS Safari can't quietly hand back a previous build of the page.
+Without these, different devices were observed running materially
+different versions of the lobby code at the same time.
+
 ### `node.script` outlet routing
 
 The patch wires `node.script` to a single `[route performer roster countdown
