@@ -404,7 +404,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "patching_rect": [ 120.0, 344.0, 217.0, 20.0 ],
-                    "text": "Listening on http://192.168.68.59:8080/"
+                    "text": "Started — 1200s, 3 performers"
                 }
             },
             {
@@ -452,7 +452,7 @@
                     "numoutlets": 4,
                     "outlettype": [ "list", "", "", "" ],
                     "patching_rect": [ 20.0, 420.0, 600.0, 280.0 ],
-                    "rows": 1
+                    "rows": 4
                 }
             },
             {
@@ -552,6 +552,8 @@
                     "saved_object_attributes": {
                         "autostart": 1,
                         "defer": 0,
+                        "node_bin_path": "",
+                        "npm_bin_path": "",
                         "watch": 1
                     },
                     "text": "node.script server.js @autostart 1 @watch 1 @restart 1",
@@ -561,17 +563,6 @@
                         "embed": 0,
                         "autowatch": 1
                     }
-                }
-            },
-            {
-                "box": {
-                    "hidden": 1,
-                    "id": "obj-print-server",
-                    "maxclass": "newobj",
-                    "numinlets": 1,
-                    "numoutlets": 0,
-                    "patching_rect": [ 1030.0, 320.0, 143.0, 22.0 ],
-                    "text": "print SERVER @popup 1"
                 }
             },
             {
@@ -804,17 +795,8 @@
             },
             {
                 "patchline": {
-                    "destination": [ "obj-print-server", 0 ],
-                    "hidden": 1,
-                    "order": 0,
-                    "source": [ "obj-nodescript", 0 ]
-                }
-            },
-            {
-                "patchline": {
                     "destination": [ "obj-route-top", 0 ],
                     "hidden": 1,
-                    "order": 1,
                     "source": [ "obj-nodescript", 0 ]
                 }
             },

@@ -77,6 +77,13 @@ function freshPerformer(name) {
     lastRoleChange: Date.now(),
     soloMusicMs: 0,
     soloDanceMs: 0,
+    // Per-partner in-progress co-role accumulators. otherName → ms in the
+    // current contiguous segment they've been in the same role. Resets to
+    // 0 when either party leaves the role, unless the threshold was
+    // already crossed (in which case the relationship moves to the
+    // permanent dancedWith/playedWith set).
+    pairMusicMs: {},
+    pairDanceMs: {},
     dancedWith:    new Set(),
     playedWith:    new Set(),
     didMusicSolo:  false,
@@ -363,17 +370,45 @@ function accumulateTime() {
   musicians.forEach(p => p.msInMusic += dt);
   dancers.forEach(  p => p.msInDance += dt);
 
-  // Pairings: every musician has now "played with" every other current musician;
-  // every dancer has now "danced with" every other current dancer.
-  for (let i = 0; i < musicians.length; i++) {
-    for (let j = 0; j < musicians.length; j++) {
-      if (i !== j) musicians[i].playedWith.add(musicians[j].name);
+  // Pair-hold: a pairing only counts as "played-with" / "danced-with" once
+  // the two performers have been in the same role together for at least
+  // cfg.soloHoldMs. A brief overlap (someone enters dance, someone else
+  // steps out a few seconds later) doesn't qualify. Same threshold as solo
+  // so there's one config knob for "minimum meaningful interaction time".
+  tickPairHold(musicians, "pairMusicMs", "playedWith");
+  tickPairHold(dancers,   "pairDanceMs", "dancedWith");
+
+  function tickPairHold(group, accumField, lockField) {
+    const inGroup = new Set(group.map(p => p.name));
+    // Increment counters for every ordered pair currently in this role
+    // group (only for pairs not yet locked in).
+    for (let i = 0; i < group.length; i++) {
+      const a = group[i];
+      for (let j = 0; j < group.length; j++) {
+        if (i === j) continue;
+        const b = group[j];
+        if (a[lockField].has(b.name)) continue;
+        a[accumField][b.name] = (a[accumField][b.name] || 0) + dt;
+        if (a[accumField][b.name] >= cfg.soloHoldMs) {
+          a[lockField].add(b.name);
+          // Mirror to b — their counter will cross on the same tick, but
+          // be defensive in case of drift / role flicker.
+          const op = performers.get(b.name);
+          if (op) op[lockField].add(a.name);
+          delete a[accumField][b.name];
+        }
+      }
     }
-  }
-  for (let i = 0; i < dancers.length; i++) {
-    for (let j = 0; j < dancers.length; j++) {
-      if (i !== j) dancers[i].dancedWith.add(dancers[j].name);
-    }
+    // Reset partial counters for pairs that aren't co-roled this tick.
+    // A leaves music → both A's and B's in-progress counters for each other
+    // drop to zero. Already-locked-in pairs in `lockField` aren't affected.
+    performers.forEach(p => {
+      Object.keys(p[accumField]).forEach(other => {
+        if (!inGroup.has(p.name) || !inGroup.has(other)) {
+          delete p[accumField][other];
+        }
+      });
+    });
   }
 
   // Solo accumulation + threshold detection.
@@ -541,7 +576,7 @@ function actuallyStartPiece() {
   startedAt  = Date.now();
   endsAt     = startedAt + cfg.durationMs;
   lastTick   = startedAt;
-  // Reset role-time + solo accumulators so a fresh run is clean.
+  // Reset role-time + solo + pair accumulators so a fresh run is clean.
   performers.forEach(p => {
     p.role           = ROLES.IDLE;
     p.msInMusic      = 0;
@@ -549,6 +584,8 @@ function actuallyStartPiece() {
     p.lastRoleChange = startedAt;
     p.soloMusicMs    = 0;
     p.soloDanceMs    = 0;
+    p.pairMusicMs    = {};
+    p.pairDanceMs    = {};
     p.dancedWith     = new Set();
     p.playedWith     = new Set();
     p.didMusicSolo   = false;
@@ -580,6 +617,8 @@ function resetState() {
     p.lastRoleChange = Date.now();
     p.soloMusicMs    = 0;
     p.soloDanceMs    = 0;
+    p.pairMusicMs    = {};
+    p.pairDanceMs    = {};
     p.dancedWith     = new Set();
     p.playedWith     = new Set();
     p.didMusicSolo   = false;

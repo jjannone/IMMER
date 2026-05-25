@@ -249,6 +249,48 @@ doesn't guarantee in-flight client sockets are closed on every Node
 version, and lingering sockets would survive into the next `startServer`
 context where their handlers wouldn't make sense.
 
+### Pair-hold threshold mirrors solo-hold (same knob, same idea)
+
+A pairing only counts as *played-with* / *danced-with* once the two
+performers have been in the same role together for at least
+`cfg.soloHoldMs`. Without this, a brief overlap — someone enters dance,
+someone else steps out a few seconds later — would falsely qualify as
+"danced with", and the coverage lists would drain in a flurry of
+meaningless transitions.
+
+The pattern is the same as solo-hold but per-pair:
+
+```js
+// Each performer carries an in-progress accumulator per partner:
+p.pairMusicMs = { otherName: msInCurrentSegment, ... }
+p.pairDanceMs = { otherName: msInCurrentSegment, ... }
+
+// Each tick, for every pair currently co-roled (and not yet locked in):
+a[accumField][b.name] = (a[accumField][b.name] || 0) + dt;
+if (a[accumField][b.name] >= cfg.soloHoldMs) {
+  a[lockField].add(b.name);
+  // mirror to b so the relationship is symmetric (b's counter also crosses
+  // on the same tick, but mirror defensively)
+  performers.get(b.name)[lockField].add(a.name);
+  delete a[accumField][b.name];
+}
+
+// Pairs that aren't co-roled this tick reset to 0 (delete from accum).
+// Already-locked pairs in lockField aren't affected.
+```
+
+We deliberately share `cfg.soloHoldMs` between solo and pair detection
+rather than introducing a second config — the patch UI stays at one knob
+labelled "Solo hold (sec)" which now means "minimum meaningful interaction
+time". If a future user wants them separated, add `cfg.pairHoldMs` and a
+second number box in the patch.
+
+The pair counters live in `freshPerformer`, get reset in
+`actuallyStartPiece` and `resetState` alongside the other run-scoped
+accumulators, and are NOT touched by `disconnectPerformer` — the next
+`accumulateTime` tick sees the disconnected performer's role as idle and
+the per-tick reset step deletes their stale partner counters automatically.
+
 ### Broadcast to `wss.clients`, not just `performers`
 
 `broadcastSnapshot` originally iterated the `performers` map and sent
