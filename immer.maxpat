@@ -39,7 +39,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 20.0, 10.0, 600.0, 24.0 ],
+                    "patching_rect": [ 20.0, 10.0, 490.0, 24.0 ],
                     "text": "IMMER — Improvised Movement+Music Ensemble (web-driven)"
                 }
             },
@@ -50,7 +50,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 20.0, 36.0, 800.0, 19.0 ],
+                    "patching_rect": [ 20.0, 36.0, 538.0, 19.0 ],
                     "text": "Performers open the URL below on phones/laptops on the same wifi, enter a name, then drive their own role."
                 }
             },
@@ -62,7 +62,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 20.0, 70.0, 600.0, 20.0 ],
+                    "patching_rect": [ 20.0, 70.0, 470.0, 20.0 ],
                     "text": "── CONFIG ──────────────────────────────────────────────"
                 }
             },
@@ -91,6 +91,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-msg-setport",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -125,6 +126,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-msg-setdur",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -159,6 +161,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-msg-setsolo",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -193,6 +196,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-msg-setcountin",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -238,12 +242,13 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-msg-start",
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 20.0, 250.0, 50.0, 22.0 ],
+                    "patching_rect": [ 20.0, 265.0, 50.0, 22.0 ],
                     "text": "start"
                 }
             },
@@ -270,12 +275,13 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-msg-stop",
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 120.0, 250.0, 50.0, 22.0 ],
+                    "patching_rect": [ 120.0, 265.0, 50.0, 22.0 ],
                     "text": "stop"
                 }
             },
@@ -302,12 +308,13 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-msg-reset",
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 220.0, 250.0, 50.0, 22.0 ],
+                    "patching_rect": [ 220.0, 265.0, 50.0, 22.0 ],
                     "text": "reset"
                 }
             },
@@ -335,12 +342,13 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-msg-clear",
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 320.0, 250.0, 50.0, 22.0 ],
+                    "patching_rect": [ 320.0, 265.0, 50.0, 22.0 ],
                     "text": "clear"
                 }
             },
@@ -395,7 +403,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 120.0, 344.0, 600.0, 20.0 ],
+                    "patching_rect": [ 120.0, 344.0, 217.0, 20.0 ],
                     "text": "Listening on http://192.168.68.59:8080/"
                 }
             },
@@ -451,6 +459,7 @@
                 "box": {
                     "fontface": 1,
                     "fontsize": 12.0,
+                    "hidden": 1,
                     "id": "obj-hdr-server",
                     "maxclass": "comment",
                     "numinlets": 1,
@@ -461,6 +470,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-loadbang",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -472,6 +482,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-defaults",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -483,6 +494,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-def-port",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -494,6 +506,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-def-dur",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -505,6 +518,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-def-solo",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -516,6 +530,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-def-countin",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -527,6 +542,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-nodescript",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -536,8 +552,6 @@
                     "saved_object_attributes": {
                         "autostart": 1,
                         "defer": 0,
-                        "node_bin_path": "",
-                        "npm_bin_path": "",
                         "watch": 1
                     },
                     "text": "node.script server.js @autostart 1 @watch 1 @restart 1",
@@ -551,6 +565,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-print-server",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -561,6 +576,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-route-top",
                     "maxclass": "newobj",
                     "numinlets": 9,
@@ -572,6 +588,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-status-pre",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -583,6 +600,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-url-pre",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -594,6 +612,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-print-complete",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -604,6 +623,7 @@
             },
             {
                 "box": {
+                    "hidden": 1,
                     "id": "obj-coverage-print",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -631,120 +651,161 @@
             {
                 "patchline": {
                     "destination": [ "obj-msg-clear", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-btn-clear", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-msg-reset", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-btn-reset", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-msg-start", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-btn-start", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-msg-stop", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-btn-stop", 0 ]
                 }
             },
             {
                 "patchline": {
+                    "destination": [ "obj-num-countin", 0 ],
+                    "hidden": 1,
+                    "source": [ "obj-def-countin", 0 ]
+                }
+            },
+            {
+                "patchline": {
                     "destination": [ "obj-num-dur", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-def-dur", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-num-port", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-def-port", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-num-solo", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-def-solo", 0 ]
                 }
             },
             {
                 "patchline": {
+                    "destination": [ "obj-def-countin", 0 ],
+                    "hidden": 1,
+                    "source": [ "obj-defaults", 3 ]
+                }
+            },
+            {
+                "patchline": {
                     "destination": [ "obj-def-dur", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-defaults", 1 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-def-port", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-defaults", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-def-solo", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-defaults", 2 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-defaults", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-loadbang", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-nodescript", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-msg-clear", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-nodescript", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-msg-reset", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-nodescript", 0 ],
+                    "hidden": 1,
+                    "source": [ "obj-msg-setcountin", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-nodescript", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-msg-setdur", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-nodescript", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-msg-setport", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-nodescript", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-msg-setsolo", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-nodescript", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-msg-start", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-nodescript", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-msg-stop", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-6", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-nodescript", 1 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-print-server", 0 ],
+                    "hidden": 1,
                     "order": 0,
                     "source": [ "obj-nodescript", 0 ]
                 }
@@ -752,98 +813,93 @@
             {
                 "patchline": {
                     "destination": [ "obj-route-top", 0 ],
+                    "hidden": 1,
                     "order": 1,
                     "source": [ "obj-nodescript", 0 ]
                 }
             },
             {
                 "patchline": {
+                    "destination": [ "obj-msg-setcountin", 0 ],
+                    "hidden": 1,
+                    "source": [ "obj-num-countin", 0 ]
+                }
+            },
+            {
+                "patchline": {
                     "destination": [ "obj-msg-setdur", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-num-dur", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-msg-setport", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-num-port", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-msg-setsolo", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-num-solo", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-cellblock", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-route-top", 7 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-countdown", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-route-top", 2 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-coverage-print", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-route-top", 5 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-print-complete", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-route-top", 6 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-status-pre", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-route-top", 3 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-url-pre", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-route-top", 4 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-status", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-status-pre", 0 ]
                 }
             },
             {
                 "patchline": {
                     "destination": [ "obj-url", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-url-pre", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-msg-setcountin", 0 ],
-                    "source": [ "obj-num-countin", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-nodescript", 0 ],
-                    "source": [ "obj-msg-setcountin", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-def-countin", 0 ],
-                    "source": [ "obj-defaults", 3 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-num-countin", 0 ],
-                    "source": [ "obj-def-countin", 0 ]
                 }
             }
         ],

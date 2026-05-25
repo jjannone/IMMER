@@ -11,6 +11,46 @@ written here travels with the code.
 
 ## Patching lessons
 
+### Hide formatter boxes (and their cables) that sit downstream of UI elements
+
+**Rule:** if a box exists *solely* to format a value coming from an upstream
+UI element — a `[setport $1]` message between a number box and `node.script`,
+a `[start]` message between a button and `node.script` — set `"hidden": 1`
+on the box and on every cable touching it. The locked-view of the patch
+should show only the user-facing controls. Plumbing is for editors, not for
+the conductor running the piece.
+
+Applied throughout `immer.maxpat`:
+
+- **Hidden message boxes:** `obj-msg-setport`, `obj-msg-setdur`,
+  `obj-msg-setsolo`, `obj-msg-setcountin` (downstream of number boxes);
+  `obj-msg-start`, `obj-msg-stop`, `obj-msg-reset`, `obj-msg-clear`
+  (downstream of transport buttons).
+- **Hidden cables:** every patchline whose source or destination is one of
+  the above. Carries `"hidden": 1` on the patchline.
+
+**When NOT to hide:**
+
+- The UI element itself (number box, button, textedit, cellblock) — those
+  are what the user clicks.
+- A `[prepend set]` feeding a display comment — also infrastructure, but
+  hide alongside the comment's incoming cable.
+- A message box the user is *meant* to click — those stay visible.
+
+**Schema:** the `hidden` flag is `1` (int), not `true`. It lives on the box
+object next to `id`, `maxclass`, etc. For patchlines it lives directly inside
+the `patchline` object alongside `source` / `destination`.
+
+```json
+{ "box": { "hidden": 1, "id": "obj-msg-setport", "maxclass": "message", ... } }
+{ "patchline": { "hidden": 1, "source": [...], "destination": [...] } }
+```
+
+**Why bother with this in source rather than just locked-view:** the patch
+is its own UI for the conductor at performance time. Visual clutter is
+genuine friction during a piece — every hidden cable is one less line in
+the eye when something goes wrong on stage.
+
 ### Don't conclude a Max attribute "doesn't exist" from a truncated grep
 
 When verifying whether an attribute or message exists on a Max object,
