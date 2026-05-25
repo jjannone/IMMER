@@ -179,9 +179,10 @@
         </div>
       </div>
 
-      <div class="countin-banner hidden" id="join-countin">
-        <div class="sub">starting in</div>
-        <div class="big" id="join-countin-num">--</div>
+      <div class="countin-banner hidden" id="join-banner">
+        <div class="sub" id="join-banner-label">starting in</div>
+        <div class="big" id="join-banner-num">--</div>
+        <div class="sub" id="join-banner-hint"></div>
       </div>
     </section>
 
@@ -239,6 +240,7 @@ const $ = (id) => document.getElementById(id);
 
 let ws         = null;
 let myName     = "";
+let iAmJoined  = false;
 let lastSnap   = null;
 let reconnectT = null;
 // "Time in current role" tracking. Pin the server-reported value at the
@@ -257,6 +259,8 @@ function connect() {
   };
   ws.onclose = () => {
     $("hdr-conn").textContent = "reconnecting…";
+    iAmJoined = false; // server drops us on disconnect; will rejoin on reopen
+    routeScreen(lastSnap);
     if (reconnectT) clearTimeout(reconnectT);
     reconnectT = setTimeout(connect, 1500);
   };
@@ -265,11 +269,16 @@ function connect() {
     let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
     if (msg.type === "snapshot") render(msg);
     else if (msg.type === "joined") {
-      myName = msg.name;
+      myName    = msg.name;
+      iAmJoined = true;
       try { localStorage.setItem("immer.name", myName); } catch (_) {}
       $("hdr-name").textContent = myName;
-      $("screen-join").classList.add("hidden");
-      $("screen-play").classList.remove("hidden");
+      // Joining doesn't navigate away — performers stay on the lobby until
+      // the piece itself starts. Just update the lobby UI to reflect status.
+      $("join-btn").textContent = "Joined as " + myName;
+      $("join-btn").disabled    = true;
+      $("name-input").disabled  = true;
+      routeScreen(lastSnap);
     }
     else if (msg.type === "error") {
       $("join-status").textContent = msg.message || "error";
@@ -288,18 +297,45 @@ function fmt(secs) {
   return m + ":" + (s < 10 ? "0" : "") + s;
 }
 
+// Decide which screen to show, based on whether the viewer has joined AND
+// whether the piece is in motion. Lobby is visible until the piece starts;
+// joining alone does NOT navigate away.
+//   not joined → lobby (always — even mid-piece, so they can still join)
+//   joined + idle → lobby (with "Joined as X" indicator)
+//   joined + counting-in or running → play screen
+function routeScreen(snap) {
+  const inMotion = !!(snap && (snap.countingIn || snap.started));
+  const showPlay = iAmJoined && inMotion;
+  $("screen-join").classList.toggle("hidden",  showPlay);
+  $("screen-play").classList.toggle("hidden", !showPlay);
+}
+
 function render(snap) {
   lastSnap = snap;
+  routeScreen(snap);
   // Roster — visible on join screen, regardless of whether viewer has joined.
   renderRoster(snap.roster || []);
   // Count-in banners shown on both screens whenever the count-in is active.
   const inCountIn = !!snap.countingIn;
   const ciSecs    = Math.max(0, Math.round((snap.countInRemainingMs || 0) / 1000));
-  $("join-countin").classList.toggle("hidden", !inCountIn);
+  const remSecs   = Math.max(0, Math.round((snap.remainingMs || 0) / 1000));
   $("play-countin").classList.toggle("hidden", !inCountIn);
+  if (inCountIn) $("play-countin-num").textContent = ciSecs;
+
+  // Lobby banner reflects whichever phase is active. Hidden when idle.
+  const joinBanner = $("join-banner");
   if (inCountIn) {
-    $("join-countin-num").textContent = ciSecs;
-    $("play-countin-num").textContent = ciSecs;
+    joinBanner.classList.remove("hidden");
+    $("join-banner-label").textContent = "starting in";
+    $("join-banner-num").textContent   = ciSecs;
+    $("join-banner-hint").textContent  = iAmJoined ? "" : "join now to play";
+  } else if (snap.started) {
+    joinBanner.classList.remove("hidden");
+    $("join-banner-label").textContent = "piece in progress";
+    $("join-banner-num").textContent   = fmt(remSecs);
+    $("join-banner-hint").textContent  = iAmJoined ? "" : "join now to play the rest";
+  } else {
+    joinBanner.classList.add("hidden");
   }
   // Start button on the join screen — disabled while running or counting in.
   $("join-start-btn").disabled = snap.started || inCountIn;
