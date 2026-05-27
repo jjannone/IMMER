@@ -155,6 +155,30 @@
     }
 
     .hidden { display: none !important; }
+
+    /* Docs view — shown when the page is opened on a public static host
+       (e.g. john.jann.one) with no cloud query params, so there's no
+       WebSocket to actually connect to. */
+    .docs { max-width: 520px; margin: 0 auto; }
+    .docs h1 { margin: 12px 0 6px; font-size: 26px; letter-spacing: 0.04em; }
+    .docs h2 {
+      margin: 22px 0 6px; font-size: 14px; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--fg); font-weight: 600;
+      padding-bottom: 4px; border-bottom: 1px solid var(--line);
+    }
+    .docs p { margin: 0 0 10px; line-height: 1.45; font-size: 14px; }
+    .docs p.muted, .docs .muted { color: var(--muted); }
+    .docs p.small, .docs .small { font-size: 12px; }
+    .docs code {
+      font-size: 12px; background: #1a1a1a; padding: 1px 6px;
+      border-radius: 4px; border: 1px solid var(--line);
+      word-break: break-all;
+    }
+    .docs :target {
+      background: rgba(255, 184, 77, 0.08);
+      box-shadow: 0 0 0 4px rgba(255, 184, 77, 0.08);
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -266,6 +290,15 @@ const cloudCfg = {
   room:  (qp.get("room")  || "").trim()
 };
 const isCloud = !!(cloudCfg.url && cloudCfg.piece && cloudCfg.room);
+// Stranded-static: the page is hosted on a public static site (GitHub
+// Pages / a *.pages.dev / jann.one) and there's no LAN host to reach and
+// no cloud params to follow. Instead of looping on a doomed WebSocket
+// reconnect, show a small docs view explaining the two ways to actually
+// join (LAN URL handed out by the operator, or a cloud URL).
+const isStrandedStatic = !isCloud && (
+  location.protocol === "https:" &&
+  /github\.io$|jann\.one$|pages\.dev$/.test(location.hostname)
+);
 
 function buildWsUrl() {
   if (isCloud) {
@@ -276,7 +309,46 @@ function buildWsUrl() {
   return proto + "//" + location.host;
 }
 
+function renderStrandedDocs() {
+  $("hdr-conn").textContent = "info";
+  $("hdr-name").textContent = "IMMER v2";
+  const main = document.querySelector("main");
+  main.innerHTML = `
+    <section class="docs">
+      <h1>IMMER v2</h1>
+      <p class="muted">
+        Web-driven score for an ensemble of dancer-musicians. To play,
+        you need a join URL — there are two ways to get one.
+      </p>
+
+      <h2 id="local">Local (same wifi as the operator)</h2>
+      <p>
+        The operator runs the Max patch on a laptop on the venue's wifi.
+        Their patch shows a <strong>Server URL</strong> that looks like
+        <code>http://192.168.1.42:8080/</code>. Open that URL in your
+        phone's browser. You and the operator must be on the same wifi.
+      </p>
+
+      <h2 id="cloud">Cloud (anywhere with internet)</h2>
+      <p>
+        If the operator has switched on <strong>Cloud connect</strong> in
+        the patch, anyone can join over the internet via a relay URL. The
+        operator hands out a link of the form
+        <code>https://john.jann.one/immer_v2/?cloud=…&amp;piece=immer_v2&amp;room=main</code>.
+        Opening it puts you straight in the lobby.
+      </p>
+
+      <p class="muted small">
+        Latency over the cloud relay is a bit higher than LAN
+        (~40–80 ms). LAN is the default — use cloud when remote
+        performers can't be in the room.
+      </p>
+    </section>
+  `;
+}
+
 function connect() {
+  if (isStrandedStatic) { renderStrandedDocs(); return; }
   ws = new WebSocket(buildWsUrl());
   ws.onopen = () => {
     $("hdr-conn").textContent = "connected";
