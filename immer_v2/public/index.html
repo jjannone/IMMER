@@ -131,8 +131,15 @@
       letter-spacing: 0.1em; color: var(--muted); font-weight: 600;
     }
     .panel ul { margin: 0; padding: 0; list-style: none; font-size: 15px; }
-    .panel li { padding: 2px 0; }
+    .panel li { padding: 2px 0; transition: color 0.2s ease; }
     .panel .empty { color: var(--muted); font-style: italic; font-size: 13px; }
+    /* Active hold: name is currently building toward a pair-hold or solo-
+       hold threshold. Server reports it via `pairingMusic / pairingDance /
+       soloingMusic / soloingDance`; the class is reapplied each render so
+       removing it (when the hold breaks before the threshold) reverts
+       the color in the next snapshot tick. */
+    .panel li.holding-music { color: var(--music); font-weight: 600; }
+    .panel li.holding-dance { color: var(--dance); font-weight: 600; }
 
     .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
@@ -467,11 +474,17 @@ function render(snap) {
   $("btn-music").classList.toggle("off", role !== "music");
   $("btn-dance").classList.toggle("off", role !== "dance");
 
-  // Coverage lists.
-  fillList("list-not-played",  you.notPlayedWith);
-  fillList("list-not-danced",  you.notDancedWith);
+  // Coverage lists. Names you're CURRENTLY accumulating a pair-hold with
+  // get highlighted in the role color while the hold is in progress; the
+  // highlight goes away the instant the server reports the hold broke
+  // (the name leaves `pairingMusic` / `pairingDance`).
+  fillList("list-not-played",  you.notPlayedWith,  new Set(you.pairingMusic || []), "music");
+  fillList("list-not-danced",  you.notDancedWith,  new Set(you.pairingDance || []), "dance");
 
   // Who still needs a solo — show music & dance side-by-side via badges.
+  // If a name is currently the lone performer in their role and building
+  // toward the solo threshold, color it (music or dance). Resets if the
+  // solo breaks before the threshold.
   const needsList = $("list-needs-solo");
   needsList.innerHTML = "";
   const needs = {};
@@ -486,6 +499,8 @@ function render(snap) {
     keys.forEach(n => {
       const li = document.createElement("li");
       li.textContent = n;
+      if (n === snap.soloingMusic) li.classList.add("holding-music");
+      else if (n === snap.soloingDance) li.classList.add("holding-dance");
       if (needs[n].music) {
         const b = document.createElement("span"); b.className = "badge music"; b.textContent = "music"; li.appendChild(b);
       }
@@ -546,7 +561,7 @@ function renderSince() {
 
 setInterval(renderSince, 1000);
 
-function fillList(id, names) {
+function fillList(id, names, holding, holdingKind) {
   const ul = $(id); ul.innerHTML = "";
   if (!names || names.length === 0) {
     const li = document.createElement("li"); li.className = "empty";
@@ -555,7 +570,13 @@ function fillList(id, names) {
     return;
   }
   names.forEach(n => {
-    const li = document.createElement("li"); li.textContent = n; ul.appendChild(li);
+    const li = document.createElement("li"); li.textContent = n;
+    // Highlight names you're actively building a hold with. The class
+    // is added unconditionally on each render, so when the server stops
+    // including the name in `holding`, the next render() drops the class
+    // and the color reverts.
+    if (holding && holding.has(n) && holdingKind) li.classList.add("holding-" + holdingKind);
+    ul.appendChild(li);
   });
 }
 

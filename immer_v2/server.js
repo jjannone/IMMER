@@ -480,13 +480,28 @@ function buildCoverage() {
       msSinceChange:    Math.max(0, now - p.lastRoleChange),
       notDancedWith:    others.filter(x => !p.dancedWith.has(x)),
       notPlayedWith:    others.filter(x => !p.playedWith.has(x)),
+      // Names you're CURRENTLY in the same role with and accumulating
+      // toward the pair-hold threshold (but not yet locked into the
+      // permanent dancedWith / playedWith sets). Empty as soon as either
+      // of you leaves the role — the client uses this to highlight a
+      // name while you're building the connection, and revert as soon
+      // as the hold breaks.
+      pairingMusic:     Object.keys(p.pairMusicMs),
+      pairingDance:     Object.keys(p.pairDanceMs),
       didMusicSolo:     p.didMusicSolo,
       didDanceSolo:     p.didDanceSolo
     };
   });
   const needsMusicSolo = names.filter(n => !performers.get(n).didMusicSolo);
   const needsDanceSolo = names.filter(n => !performers.get(n).didDanceSolo);
-  return { perPerformer, needsMusicSolo, needsDanceSolo };
+  // Who's currently the lone performer in their role AND accumulating
+  // toward the solo-hold threshold (i.e. not yet didSolo). Null when no
+  // one is solo, or the solo performer has already crossed the threshold.
+  const musicians = names.filter(n => performers.get(n).role === ROLES.MUSIC);
+  const dancers   = names.filter(n => performers.get(n).role === ROLES.DANCE);
+  const soloingMusic = (musicians.length === 1 && performers.get(musicians[0]).soloMusicMs > 0 && !performers.get(musicians[0]).didMusicSolo) ? musicians[0] : null;
+  const soloingDance = (dancers.length === 1 && performers.get(dancers[0]).soloDanceMs > 0 && !performers.get(dancers[0]).didDanceSolo) ? dancers[0] : null;
+  return { perPerformer, needsMusicSolo, needsDanceSolo, soloingMusic, soloingDance };
 }
 
 function snapshotFor(viewerName) {
@@ -504,7 +519,14 @@ function snapshotFor(viewerName) {
     soloHoldMs:  cfg.soloHoldMs,
     roster:      allNames(),
     needsMusicSolo: cov.needsMusicSolo,
-    needsDanceSolo: cov.needsDanceSolo
+    needsDanceSolo: cov.needsDanceSolo,
+    // Who's actively building toward a solo right now — null when no
+    // one's solo (or when the solo performer has already crossed the
+    // threshold). Used by the client to highlight a name in the
+    // "still needs a solo" list while the hold is accumulating, and
+    // revert the moment the hold breaks.
+    soloingMusic:   cov.soloingMusic,
+    soloingDance:   cov.soloingDance
   };
   if (viewerName && cov.perPerformer[viewerName]) {
     out.you = Object.assign({ name: viewerName }, cov.perPerformer[viewerName]);
