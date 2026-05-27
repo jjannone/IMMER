@@ -50,7 +50,9 @@ try {
 // ── config (driven from the patch) ──────────────────────────────
 
 const cfg = {
-  port:           8080,
+  // v2 defaults to 8081 so it can coexist with a v1 patch (which uses 8080)
+  // on the same laptop. Override from the patch's Port number box if needed.
+  port:           8081,
   durationMs:     20 * 60 * 1000, // 20 min default
   soloHoldMs:     15 * 1000,      // counts as a "solo" once held alone this long
   countInMs:      10 * 1000,      // delay between START and the piece actually beginning
