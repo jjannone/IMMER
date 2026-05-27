@@ -163,6 +163,58 @@
 
     .hidden { display: none !important; }
 
+    /* End-of-piece urgency flash. Controlled by a class on <body>,
+       driven by remainingMs:
+         > 120s : no class
+         60–120s: .urgent-slow  (slow flash)
+         10–60s : .urgent-fast  (fast flash)
+         ≤ 10s  : .urgent-solid (solid red, no flash)
+         done   : .end-state    (deep solid red, persists)
+       The flash animates body background between the normal --bg and a
+       dark red; text colours stay readable. */
+    @keyframes flash-red {
+      0%, 100% { background-color: #111; }
+      50%      { background-color: #5a0a0a; }
+    }
+    body.urgent-slow  { animation: flash-red 1.6s ease-in-out infinite; }
+    body.urgent-fast  { animation: flash-red 0.5s ease-in-out infinite; }
+    body.urgent-solid { background-color: #5a0a0a; }
+    body.end-state    { background-color: #2a0606; }
+
+    /* Tappable roster chip — used on the join screen for re-join by
+       clicking a name (especially after a disconnect). Disabled visually
+       once the viewer has joined. */
+    .chip.tappable  { cursor: pointer; }
+    .chip.tappable:active { transform: scale(0.96); }
+    .chip.gone {
+      opacity: 0.55; border-style: dashed;
+      color: var(--muted);
+    }
+
+    /* End screen — final report. */
+    .end-header {
+      text-align: center; font-size: 28px; letter-spacing: 0.05em;
+      font-weight: 600; padding: 18px 0 4px; color: var(--warn);
+      text-shadow: 0 0 8px rgba(255, 122, 122, 0.4);
+    }
+    .end-sub {
+      text-align: center; font-size: 13px; color: var(--muted);
+      padding-bottom: 16px;
+    }
+    .end-panel { margin: 12px 0; }
+    .end-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 6px 0; font-size: 15px;
+      border-bottom: 1px dashed var(--line);
+    }
+    .end-row:last-child { border-bottom: none; }
+    .end-row-vert { flex-direction: column; align-items: stretch; gap: 4px; }
+    .end-key   { color: var(--muted); font-size: 13px; }
+    .end-val   { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .end-val.music { color: var(--music); }
+    .end-val.dance { color: var(--dance); }
+    .end-val-list { font-weight: 400; font-size: 14px; color: var(--fg); }
+
     /* Docs view — shown when the page is opened on a public static host
        (e.g. john.jann.one) with no cloud query params, so there's no
        WebSocket to actually connect to. */
@@ -265,6 +317,40 @@
 
       <div class="footer-note" id="footer-note"></div>
     </section>
+
+    <!-- END — final report shown to every connected client when the piece
+         completes naturally (durationMs elapsed). Manual STOP doesn't
+         show this; only a clean run does. Server controls visibility via
+         the `completed` flag. -->
+    <section id="screen-end" class="hidden">
+      <div class="end-header">PIECE COMPLETE</div>
+      <div class="end-sub" id="end-sub">final run</div>
+
+      <div class="panel end-panel" id="end-personal-panel">
+        <h2>Your run</h2>
+        <div class="end-row"><span class="end-key">Time playing music</span><span class="end-val music" id="end-music-time">0:00</span></div>
+        <div class="end-row"><span class="end-key">Time dancing</span><span class="end-val dance" id="end-dance-time">0:00</span></div>
+        <div class="end-row"><span class="end-key">Music partners</span><span class="end-val" id="end-music-partners">0 of 0</span></div>
+        <div class="end-row"><span class="end-key">Dance partners</span><span class="end-val" id="end-dance-partners">0 of 0</span></div>
+        <div class="end-row"><span class="end-key">Music solo</span><span class="end-val" id="end-music-solo">✗</span></div>
+        <div class="end-row"><span class="end-key">Dance solo</span><span class="end-val" id="end-dance-solo">✗</span></div>
+      </div>
+
+      <div class="panel end-panel">
+        <h2>Ensemble</h2>
+        <div class="end-row"><span class="end-key">Performers</span><span class="end-val" id="end-performers">0</span></div>
+        <div class="end-row"><span class="end-key">Music solos</span><span class="end-val" id="end-music-solos">0</span></div>
+        <div class="end-row"><span class="end-key">Dance solos</span><span class="end-val" id="end-dance-solos">0</span></div>
+        <div class="end-row end-row-vert" id="end-needs-music-row">
+          <span class="end-key">Still needed a music solo</span>
+          <span class="end-val end-val-list" id="end-needs-music">—</span>
+        </div>
+        <div class="end-row end-row-vert" id="end-needs-dance-row">
+          <span class="end-key">Still needed a dance solo</span>
+          <span class="end-val end-val-list" id="end-needs-dance">—</span>
+        </div>
+      </div>
+    </section>
   </main>
 
 <script>
@@ -282,6 +368,11 @@ let reconnectT = null;
 // smoothly between snapshots (~2s apart).
 let sinceRole       = "idle";
 let sinceMsAtSnap   = 0;
+// Snapshot-relative pin for remaining time, so the countdown + urgency
+// state tick locally at 1Hz instead of stepping every ~2s with each
+// server push. Cleared when the piece isn't running.
+let remainingMsAtSnap = null;
+let remainingSnapLocal = 0;
 let sinceSnapLocal  = Date.now();
 
 // Two connect modes:
@@ -411,17 +502,48 @@ function fmt(secs) {
 //   joined + idle → lobby (with "Joined as X" indicator)
 //   joined + counting-in or running → play screen
 function routeScreen(snap) {
-  const inMotion = !!(snap && (snap.countingIn || snap.started));
-  const showPlay = iAmJoined && inMotion;
-  $("screen-join").classList.toggle("hidden",  showPlay);
+  const completed = !!(snap && snap.completed);
+  const inMotion  = !!(snap && (snap.countingIn || snap.started));
+  const showEnd   = completed;
+  const showPlay  = !completed && iAmJoined && inMotion;
+  const showJoin  = !completed && !showPlay;
+  $("screen-end").classList.toggle("hidden",  !showEnd);
   $("screen-play").classList.toggle("hidden", !showPlay);
+  $("screen-join").classList.toggle("hidden", !showJoin);
+}
+
+// Drive the red-flash urgency state from remainingMs. Re-applied on every
+// snapshot tick AND on the local 1Hz timer so the body class flips even
+// between server pushes (snapshots are ~2s apart). When completed, lock
+// the body into the persistent end-state.
+function applyUrgency(snap) {
+  const body = document.body;
+  body.classList.remove("urgent-slow", "urgent-fast", "urgent-solid", "end-state");
+  if (!snap) return;
+  if (snap.completed) { body.classList.add("end-state"); return; }
+  if (!snap.started)  return;  // count-in / lobby: no urgency
+  const ms = snap.remainingMs;
+  if (ms == null) return;
+  if (ms <= 10000) body.classList.add("urgent-solid");
+  else if (ms <= 60000)  body.classList.add("urgent-fast");
+  else if (ms <= 120000) body.classList.add("urgent-slow");
 }
 
 function render(snap) {
   lastSnap = snap;
+  // Pin remainingMs so the 1Hz local tick can drive the countdown +
+  // urgency flash between snapshots. Cleared once the piece isn't running.
+  if (snap.started && typeof snap.remainingMs === "number") {
+    remainingMsAtSnap = snap.remainingMs;
+    remainingSnapLocal = Date.now();
+  } else {
+    remainingMsAtSnap = null;
+  }
   routeScreen(snap);
+  applyUrgency(snap);
+  if (snap.completed) renderEndReport(snap);
   // Roster — visible on join screen, regardless of whether viewer has joined.
-  renderRoster(snap.roster || []);
+  renderRoster(snap.roster || [], new Set(snap.disconnected || []));
   // Count-in banners shown on both screens whenever the count-in is active.
   const inCountIn = !!snap.countingIn;
   const ciSecs    = Math.max(0, Math.round((snap.countInRemainingMs || 0) / 1000));
@@ -530,7 +652,8 @@ function setBtn(el, active, kind) {
   }
 }
 
-function renderRoster(names) {
+function renderRoster(names, disconnected) {
+  disconnected = disconnected || new Set();
   $("roster-count").textContent = names.length;
   const wrap = $("roster-chips");
   wrap.innerHTML = "";
@@ -543,10 +666,50 @@ function renderRoster(names) {
   }
   names.forEach(n => {
     const c = document.createElement("span");
-    c.className = "chip" + (n === myName ? " me" : "");
+    let cls = "chip";
+    if (n === myName) cls += " me";
+    if (disconnected.has(n)) cls += " gone";
+    // Tap-to-rejoin: any unjoined viewer can claim a name by tapping its
+    // chip. Especially useful when a phone disconnects (lost wifi, screen
+    // lock, refresh) — the performer record persists on the server and
+    // tapping the name re-attaches without re-typing.
+    if (!iAmJoined) cls += " tappable";
+    c.className = cls;
     c.textContent = n;
+    if (!iAmJoined) {
+      c.addEventListener("click", () => {
+        if (iAmJoined) return;
+        $("name-input").value = n;
+        $("join-btn").click();
+      });
+    }
     wrap.appendChild(c);
   });
+}
+
+function renderEndReport(snap) {
+  const you = snap.you || null;
+  // Personal panel is only meaningful for joined performers.
+  $("end-personal-panel").classList.toggle("hidden", !you);
+  if (you) {
+    const others = Math.max(0, (snap.roster || []).length - 1);
+    $("end-music-time").textContent = fmt(you.msInMusic / 1000);
+    $("end-dance-time").textContent = fmt(you.msInDance / 1000);
+    $("end-music-partners").textContent = (others - (you.notPlayedWith || []).length) + " of " + others;
+    $("end-dance-partners").textContent = (others - (you.notDancedWith || []).length) + " of " + others;
+    const ms = $("end-music-solo"); ms.textContent = you.didMusicSolo ? "✓" : "✗"; ms.classList.toggle("music", !!you.didMusicSolo);
+    const ds = $("end-dance-solo"); ds.textContent = you.didDanceSolo ? "✓" : "✗"; ds.classList.toggle("dance", !!you.didDanceSolo);
+  }
+  const roster = (snap.roster || []).length;
+  const needsM = (snap.needsMusicSolo || []);
+  const needsD = (snap.needsDanceSolo || []);
+  $("end-performers").textContent = String(roster);
+  $("end-music-solos").textContent = (roster - needsM.length) + " of " + roster;
+  $("end-dance-solos").textContent = (roster - needsD.length) + " of " + roster;
+  $("end-needs-music-row").classList.toggle("hidden", needsM.length === 0);
+  $("end-needs-dance-row").classList.toggle("hidden", needsD.length === 0);
+  $("end-needs-music").textContent = needsM.length ? needsM.join(", ") : "—";
+  $("end-needs-dance").textContent = needsD.length ? needsD.join(", ") : "—";
 }
 
 function renderSince() {
@@ -560,6 +723,24 @@ function renderSince() {
 }
 
 setInterval(renderSince, 1000);
+
+// Local 1Hz tick — keeps the urgency flash + the countdown number
+// stepping every second instead of jumping every ~2s when the server
+// snapshot lands. Uses the pinned remainingMsAtSnap to compute the
+// current value relative to local time.
+setInterval(() => {
+  if (!lastSnap) return;
+  if (remainingMsAtSnap == null) return;  // not currently running
+  const ms = Math.max(0, remainingMsAtSnap - (Date.now() - remainingSnapLocal));
+  // Synthesize a snapshot with the locally-ticked remainingMs so
+  // applyUrgency sees the threshold crossings without waiting for the
+  // next server push.
+  applyUrgency(Object.assign({}, lastSnap, { remainingMs: ms }));
+  // Also update the countdown digits so they tick 1s instead of 2s.
+  if (lastSnap.started && !lastSnap.completed && !lastSnap.countingIn) {
+    $("countdown").textContent = fmt(Math.round(ms / 1000));
+  }
+}, 1000);
 
 function fillList(id, names, holding, holdingKind) {
   const ul = $(id); ul.innerHTML = "";

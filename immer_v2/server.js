@@ -100,11 +100,16 @@ function freshPerformer(name) {
 }
 
 // Performance transport state.
-//   countingIn → started → (countdown hits zero) → ended
+//   countingIn → started → (countdown hits zero) → completed
 // `countingIn` and `started` are mutually exclusive; both false = idle.
+// `completed` distinguishes "piece finished naturally" from "idle before
+// any START" — clients use it to stay on the end-of-run report screen
+// instead of dropping back to the lobby. Cleared on the next beginCountIn
+// / stopPiece / resetState / clear.
 let countingIn     = false;
 let countInEndsAt  = 0;
 let started        = false;
+let completed      = false;
 let startedAt      = 0;
 let endsAt         = 0;
 let lastTick       = Date.now();
@@ -508,16 +513,22 @@ function snapshotFor(viewerName) {
   const cov = buildCoverage();
   const remainingMs       = started ? Math.max(0, endsAt - Date.now()) : cfg.durationMs;
   const countInRemainingMs = countingIn ? Math.max(0, countInEndsAt - Date.now()) : 0;
+  // Performers currently without a live socket — clients render their
+  // chip greyed out and tappable, so a returning user can re-claim
+  // their name with one tap rather than re-typing it.
+  const disconnected = allNames().filter(n => !performers.get(n).connected);
   const out = {
     type:        "snapshot",
     started,
     countingIn,
+    completed,
     countInRemainingMs,
     countInMs:   cfg.countInMs,
     remainingMs,
     durationMs:  cfg.durationMs,
     soloHoldMs:  cfg.soloHoldMs,
     roster:      allNames(),
+    disconnected,
     needsMusicSolo: cov.needsMusicSolo,
     needsDanceSolo: cov.needsDanceSolo,
     // Who's actively building toward a solo right now — null when no
@@ -608,6 +619,9 @@ function fmtMS(ms) {
 
 function beginCountIn() {
   if (countingIn || started) return;
+  // Fresh piece — clear any prior end-of-run state so the end screen
+  // on clients gives way to count-in → play.
+  completed = false;
   // Reset per-performer state at the START of count-in (not at
   // actuallyStartPiece), so role buttons clicked during count-in
   // actually stake a starting role for the piece instead of being
@@ -657,6 +671,7 @@ function stopPiece() {
   if (started) accumulateTime();
   countingIn = false;
   started    = false;
+  completed  = false; // a manual stop is not a natural end — no end screen
   Max.outlet("status", wasRunning ? "Stopped" : "Count-in cancelled");
   broadcastSnapshot();
 }
@@ -664,6 +679,7 @@ function stopPiece() {
 function resetState() {
   countingIn = false;
   started    = false;
+  completed  = false;
   performers.forEach(p => {
     p.role           = ROLES.IDLE;
     p.msInMusic      = 0;
@@ -700,7 +716,8 @@ function tick() {
   const remainingMs = endsAt - Date.now();
   Max.outlet("countdown", Math.max(0, Math.round(remainingMs / 1000)));
   if (remainingMs <= 0) {
-    started = false;
+    started   = false;
+    completed = true;
     Max.outlet("status", "Performance complete");
     Max.outlet("complete", "bang");
     broadcastSnapshot();
