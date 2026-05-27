@@ -181,6 +181,29 @@
     body.urgent-solid { background-color: #5a0a0a; }
     body.end-state    { background-color: #2a0606; }
 
+    /* Watcher / null-user mode. A phone can tap "Just watch" on the
+       lobby to monitor without joining the roster. The body carries
+       `.watching`; performer-only DOM is hidden, watcher-only DOM
+       (currently-in-role lists, watching badge, leave button) appears
+       in its place. */
+    .watcher-only { display: none; }
+    body.watching .performer-only { display: none !important; }
+    body.watching .watcher-only   { display: block; }
+    body.watching .watcher-only.watch-leave,
+    body.watching .watcher-only.watching-badge { display: block; }
+    .watching-badge {
+      text-align: center; padding: 8px 12px; margin: 8px 0;
+      border: 1px dashed var(--line); border-radius: 8px;
+      color: var(--muted); font-size: 13px; letter-spacing: 0.04em;
+    }
+    .watch-row { text-align: center; margin: 6px 0 0; }
+    .watch-leave { text-align: center; margin-top: 6px; }
+    button.watch {
+      background: transparent; color: var(--muted); border: 1px solid var(--line);
+      padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    }
+    button.watch:hover, button.watch:active { color: var(--fg); border-color: var(--muted); }
+
     /* Tappable roster chip — used on the join screen for re-join by
        clicking a name (especially after a disconnect). Disabled visually
        once the viewer has joined. */
@@ -257,6 +280,9 @@
         <button id="join-start-btn" class="start">Start the piece</button>
       </div>
       <p class="small" id="join-status"></p>
+      <p class="watch-row">
+        <button id="watch-btn" class="watch">Just watch (don't play)</button>
+      </p>
 
       <div class="roster-panel">
         <h2>Already joined (<span id="roster-count">0</span>)</h2>
@@ -272,39 +298,55 @@
       </div>
     </section>
 
-    <!-- PERFORM -->
+    <!-- PERFORM (also used in watcher mode — performer-only elements
+         hide when <body> carries .watching, watcher-only elements appear
+         in their place). -->
     <section id="screen-play" class="hidden">
       <div class="countdown" id="countdown">--:--</div>
       <div class="status" id="status-line">waiting for the piece to begin</div>
-      <div class="since" id="since-line">in <strong id="since-role">idle</strong> for <span class="num" id="since-time">0:00</span></div>
+      <div class="since performer-only" id="since-line">in <strong id="since-role">idle</strong> for <span class="num" id="since-time">0:00</span></div>
+      <div class="watching-badge watcher-only">watching only — not playing</div>
 
       <div class="countin-banner hidden" id="play-countin">
         <div class="sub">starting in</div>
         <div class="big" id="play-countin-num">--</div>
       </div>
 
-      <div class="buttons">
+      <div class="buttons performer-only">
         <div class="btn off" id="btn-music">I'm Playing Music</div>
         <div class="btn off" id="btn-dance">I'm Dancing</div>
       </div>
-      <div class="clear" id="btn-idle">tap here to step out (neither)</div>
+      <div class="clear performer-only" id="btn-idle">tap here to step out (neither)</div>
 
-      <div class="panel">
+      <!-- Performer-only coverage panels (built from `you`). -->
+      <div class="panel performer-only">
         <h2>Haven't played music with</h2>
         <ul id="list-not-played"><li class="empty">—</li></ul>
       </div>
 
-      <div class="panel">
+      <div class="panel performer-only">
         <h2>Haven't danced with</h2>
         <ul id="list-not-danced"><li class="empty">—</li></ul>
       </div>
 
+      <!-- Watcher-only "currently in role" panels (built from snap.currently). -->
+      <div class="panel watcher-only">
+        <h2>Currently playing music</h2>
+        <ul id="list-currently-music"><li class="empty">—</li></ul>
+      </div>
+
+      <div class="panel watcher-only">
+        <h2>Currently dancing</h2>
+        <ul id="list-currently-dance"><li class="empty">—</li></ul>
+      </div>
+
+      <!-- Shared by both: who still needs a solo. -->
       <div class="panel">
         <h2>Still needs a solo</h2>
         <ul id="list-needs-solo"><li class="empty">—</li></ul>
       </div>
 
-      <div class="panel stats">
+      <div class="panel stats performer-only">
         <div>
           <div class="stat-label">Time playing music</div>
           <div class="stat-value music" id="stat-music">0:00</div>
@@ -316,6 +358,9 @@
       </div>
 
       <div class="footer-note" id="footer-note"></div>
+      <p class="watcher-only watch-leave">
+        <button id="watch-leave-btn" class="watch">Stop watching</button>
+      </p>
     </section>
 
     <!-- END — final report shown to every connected client when the piece
@@ -361,6 +406,10 @@ const $ = (id) => document.getElementById(id);
 let ws         = null;
 let myName     = "";
 let iAmJoined  = false;
+// "Null-user" mode — the phone is just monitoring (no roster entry, no
+// role buttons). Lives only in memory; a hard refresh returns to the
+// lobby, same as the no-localStorage rule for performer names.
+let iAmWatching = false;
 let lastSnap   = null;
 let reconnectT = null;
 // "Time in current role" tracking. Pin the server-reported value at the
@@ -504,12 +553,18 @@ function fmt(secs) {
 function routeScreen(snap) {
   const completed = !!(snap && snap.completed);
   const inMotion  = !!(snap && (snap.countingIn || snap.started));
-  const showEnd   = completed;
-  const showPlay  = !completed && iAmJoined && inMotion;
+  // Watchers see the play screen anytime the piece is in motion. Pre-
+  // piece they see the lobby so they can change their mind and join.
+  const showEnd   = completed && (iAmJoined || iAmWatching);
+  const showPlay  = !completed && (iAmJoined || iAmWatching) && inMotion;
   const showJoin  = !completed && !showPlay;
   $("screen-end").classList.toggle("hidden",  !showEnd);
   $("screen-play").classList.toggle("hidden", !showPlay);
   $("screen-join").classList.toggle("hidden", !showJoin);
+  // Body class drives the CSS rules that swap performer-only DOM for
+  // watcher-only DOM. Watcher mode is active when the viewer has chosen
+  // to watch and has NOT joined as a performer.
+  document.body.classList.toggle("watching", iAmWatching && !iAmJoined);
 }
 
 // Drive the red-flash urgency state from remainingMs. Re-applied on every
@@ -595,6 +650,12 @@ function render(snap) {
   setBtn($("btn-dance"), role === "dance", "dance");
   $("btn-music").classList.toggle("off", role !== "music");
   $("btn-dance").classList.toggle("off", role !== "dance");
+
+  // Watcher-only lists: who's currently in each role. Populated on every
+  // render so they stay live as performers change roles. Empty placeholder
+  // for empty groups.
+  fillList("list-currently-music", (snap.currently && snap.currently.music) || []);
+  fillList("list-currently-dance", (snap.currently && snap.currently.dance) || []);
 
   // Coverage lists. Names you're CURRENTLY accumulating a pair-hold with
   // get highlighted in the role color while the hold is in progress; the
@@ -774,6 +835,20 @@ $("name-input").addEventListener("keydown", (e) => {
 
 // Start button on the join screen — fires the count-in from any device.
 $("join-start-btn").addEventListener("click", () => send({ type: "start" }));
+
+// — wire watcher buttons —
+$("watch-btn").addEventListener("click", () => {
+  iAmWatching = true;
+  $("hdr-name").textContent = "watching";
+  if (lastSnap) render(lastSnap); // re-render so screens + body class update immediately
+  else routeScreen(null);
+});
+$("watch-leave-btn").addEventListener("click", () => {
+  iAmWatching = false;
+  $("hdr-name").textContent = myName || "IMMER";
+  if (lastSnap) render(lastSnap);
+  else routeScreen(null);
+});
 
 // — wire role buttons —
 $("btn-music").addEventListener("click", () => send({ type: "role", name: myName, role: "music" }));
