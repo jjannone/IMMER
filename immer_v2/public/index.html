@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>IMMER</title>
+  <style>
+    :root {
+      --bg:         #111;
+      --fg:         #eee;
+      --muted:      #888;
+      --line:       #2a2a2a;
+      --music:      #ffb84d;
+      --dance:      #6cd0ff;
+      --music-dim:  #5a4226;
+      --dance-dim:  #234556;
+      --warn:       #ff7a7a;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg); color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      overscroll-behavior: none;
+    }
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    header {
+      padding: 14px 18px 6px;
+      display: flex; justify-content: space-between; align-items: baseline;
+      border-bottom: 1px solid var(--line);
+    }
+    header .name  { font-size: 18px; font-weight: 600; }
+    header .small { color: var(--muted); font-size: 12px; }
+
+    main { flex: 1; padding: 14px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* Join screen */
+    .join {
+      flex: 1; display: flex; flex-direction: column; gap: 14px;
+      max-width: 460px; margin: 0 auto; width: 100%; padding-top: 10px;
+    }
+    .join h1   { margin: 0; font-size: 26px; letter-spacing: 0.04em; }
+    .join p    { color: var(--muted); margin: 0; font-size: 13px; }
+    .join input {
+      font-size: 22px; padding: 14px 16px; border-radius: 10px;
+      background: #1a1a1a; color: var(--fg); border: 1px solid var(--line);
+      width: 100%;
+    }
+    .join .row { display: flex; gap: 10px; }
+    .join button {
+      font-size: 18px; padding: 14px; border-radius: 10px; border: 0;
+      font-weight: 600; flex: 1; cursor: pointer;
+    }
+    .join button.primary { background: var(--fg); color: var(--bg); }
+    .join button.start   {
+      background: #1f3a1f; color: #6cd06c; border: 2px solid #6cd06c;
+    }
+    .join button:disabled { opacity: 0.4; cursor: default; }
+
+    .roster-panel { margin-top: 4px; }
+    .roster-panel h2 {
+      margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); font-weight: 600;
+    }
+    .roster-chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      min-height: 30px; padding: 6px;
+      border: 1px solid var(--line); border-radius: 10px;
+    }
+    .chip {
+      padding: 4px 10px; border-radius: 999px;
+      background: #1a1a1a; border: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .chip.me { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    .roster-empty { color: var(--muted); font-style: italic; font-size: 13px; padding: 4px 8px; }
+
+    .countin-banner {
+      text-align: center; padding: 14px;
+      background: #2a2a1a; border: 1px solid #6cd06c; border-radius: 10px;
+      color: #c8e0c8;
+    }
+    .countin-banner .big {
+      font-size: 48px; font-weight: 200; font-variant-numeric: tabular-nums;
+      color: #6cd06c;
+    }
+    .countin-banner .sub { font-size: 13px; color: var(--muted); }
+
+    /* Performance screen */
+    .countdown {
+      text-align: center; font-variant-numeric: tabular-nums;
+      font-size: 64px; font-weight: 200; letter-spacing: 0.02em;
+      padding: 6px 0 2px;
+    }
+    .status   { text-align: center; color: var(--muted); font-size: 13px; }
+
+    .since {
+      text-align: center; font-size: 14px; padding: 2px 0 6px;
+      font-variant-numeric: tabular-nums; color: var(--muted);
+    }
+    .since strong { font-weight: 600; }
+    .since.music strong  { color: var(--music); }
+    .since.dance strong  { color: var(--dance); }
+    .since .num { font-variant-numeric: tabular-nums; }
+
+    .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
+    .btn {
+      padding: 28px 8px; border-radius: 14px; border: 2px solid transparent;
+      font-size: 20px; font-weight: 600; text-align: center; cursor: pointer;
+      transition: transform 0.05s ease;
+      user-select: none;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn.music  { background: var(--music-dim); color: var(--music); border-color: var(--music); }
+    .btn.dance  { background: var(--dance-dim); color: var(--dance); border-color: var(--dance); }
+    .btn.off    { background: #1a1a1a; color: var(--muted); border-color: var(--line); }
+
+    .clear {
+      text-align: center; font-size: 14px; color: var(--muted);
+      padding: 6px; border: 1px dashed var(--line); border-radius: 10px;
+    }
+
+    .panel {
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    }
+    .panel h2 {
+      margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); font-weight: 600;
+    }
+    .panel ul { margin: 0; padding: 0; list-style: none; font-size: 15px; }
+    .panel li { padding: 2px 0; }
+    .panel .empty { color: var(--muted); font-style: italic; font-size: 13px; }
+
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .stat-value { font-size: 22px; font-variant-numeric: tabular-nums; }
+    .stat-value.music { color: var(--music); }
+    .stat-value.dance { color: var(--dance); }
+
+    .badge {
+      display: inline-block; padding: 1px 6px; border-radius: 999px;
+      font-size: 10px; margin-left: 6px; vertical-align: middle;
+    }
+    .badge.music { background: var(--music-dim); color: var(--music); }
+    .badge.dance { background: var(--dance-dim); color: var(--dance); }
+    .badge.done  { background: #1a1a1a; color: var(--muted); }
+
+    .waiting { text-align: center; color: var(--muted); padding: 30px 10px; }
+
+    .footer-note {
+      font-size: 11px; color: var(--muted); text-align: center; padding: 10px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="name" id="hdr-name">IMMER</div>
+    <div class="small" id="hdr-conn">connecting…</div>
+  </header>
+
+  <main>
+    <!-- JOIN -->
+    <section class="join" id="screen-join">
+      <h1>IMMER</h1>
+      <p>Enter your name to join the ensemble.</p>
+      <input id="name-input" type="text" inputmode="text" autocomplete="off" autocapitalize="words" placeholder="Your name" />
+      <div class="row">
+        <button id="join-btn" class="primary">Join</button>
+        <button id="join-start-btn" class="start">Start the piece</button>
+      </div>
+      <p class="small" id="join-status"></p>
+
+      <div class="roster-panel">
+        <h2>Already joined (<span id="roster-count">0</span>)</h2>
+        <div class="roster-chips" id="roster-chips">
+          <div class="roster-empty">no one yet — be the first</div>
+        </div>
+      </div>
+
+      <div class="countin-banner hidden" id="join-banner">
+        <div class="sub" id="join-banner-label">starting in</div>
+        <div class="big" id="join-banner-num">--</div>
+        <div class="sub" id="join-banner-hint"></div>
+      </div>
+    </section>
+
+    <!-- PERFORM -->
+    <section id="screen-play" class="hidden">
+      <div class="countdown" id="countdown">--:--</div>
+      <div class="status" id="status-line">waiting for the piece to begin</div>
+      <div class="since" id="since-line">in <strong id="since-role">idle</strong> for <span class="num" id="since-time">0:00</span></div>
+
+      <div class="countin-banner hidden" id="play-countin">
+        <div class="sub">starting in</div>
+        <div class="big" id="play-countin-num">--</div>
+      </div>
+
+      <div class="buttons">
+        <div class="btn off" id="btn-music">I'm Playing Music</div>
+        <div class="btn off" id="btn-dance">I'm Dancing</div>
+      </div>
+      <div class="clear" id="btn-idle">tap here to step out (neither)</div>
+
+      <div class="panel">
+        <h2>Haven't played music with</h2>
+        <ul id="list-not-played"><li class="empty">—</li></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Haven't danced with</h2>
+        <ul id="list-not-danced"><li class="empty">—</li></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Still needs a solo</h2>
+        <ul id="list-needs-solo"><li class="empty">—</li></ul>
+      </div>
+
+      <div class="panel stats">
+        <div>
+          <div class="stat-label">Time playing music</div>
+          <div class="stat-value music" id="stat-music">0:00</div>
+        </div>
+        <div>
+          <div class="stat-label">Time dancing</div>
+          <div class="stat-value dance" id="stat-dance">0:00</div>
+        </div>
+      </div>
+
+      <div class="footer-note" id="footer-note"></div>
+    </section>
+  </main>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+let ws         = null;
+let myName     = "";
+let iAmJoined  = false;
+let lastSnap   = null;
+let reconnectT = null;
+// "Time in current role" tracking. Pin the server-reported value at the
+// moment the snapshot lands and tick locally so the display updates
+// smoothly between snapshots (~2s apart).
+let sinceRole       = "idle";
+let sinceMsAtSnap   = 0;
+let sinceSnapLocal  = Date.now();
+
+// Two connect modes:
+//   • LAN — the page was served by IMMER v2's Node-for-Max server; the WS
+//           talks to `location.host` directly.
+//   • Cloud — the page was opened with ?cloud=<wss-url>&piece=<slug>&room=<slug>
+//             and connects through the shared mu-relay Cloudflare Worker
+//             as a "perform" client. The Max patch is the relay's "host".
+const qp = new URLSearchParams(location.search);
+const cloudCfg = {
+  url:   (qp.get("cloud") || "").trim(),
+  piece: (qp.get("piece") || "").trim(),
+  room:  (qp.get("room")  || "").trim()
+};
+const isCloud = !!(cloudCfg.url && cloudCfg.piece && cloudCfg.room);
+
+function buildWsUrl() {
+  if (isCloud) {
+    const trimmed = cloudCfg.url.replace(/\/+$/, "");
+    return `${trimmed}/mu/${encodeURIComponent(cloudCfg.piece)}/${encodeURIComponent(cloudCfg.room)}/perform`;
+  }
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return proto + "//" + location.host;
+}
+
+function connect() {
+  ws = new WebSocket(buildWsUrl());
+  ws.onopen = () => {
+    $("hdr-conn").textContent = "connected";
+    if (myName) ws.send(JSON.stringify({ type: "join", name: myName }));
+  };
+  ws.onclose = () => {
+    $("hdr-conn").textContent = "reconnecting…";
+    iAmJoined = false; // server drops us on disconnect; will rejoin on reopen
+    routeScreen(lastSnap);
+    if (reconnectT) clearTimeout(reconnectT);
+    reconnectT = setTimeout(connect, 1500);
+  };
+  ws.onerror = () => { try { ws.close(); } catch (_) {} };
+  ws.onmessage = (e) => {
+    let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
+    // Cloud relay sends a `mu-hello` envelope when the perform socket
+    // attaches. Useful diagnostically; nothing to render. Anything else
+    // routes through the same handlers as LAN.
+    if (msg.type === "mu-hello") return;
+    if (msg.type === "snapshot") render(msg);
+    else if (msg.type === "joined") {
+      myName    = msg.name;
+      iAmJoined = true;
+      $("hdr-name").textContent = myName;
+      // Joining doesn't navigate away — performers stay on the lobby until
+      // the piece itself starts. Just update the lobby UI to reflect status.
+      $("join-btn").textContent = "Joined as " + myName;
+      $("join-btn").disabled    = true;
+      $("name-input").disabled  = true;
+      routeScreen(lastSnap);
+    }
+    else if (msg.type === "error") {
+      $("join-status").textContent = msg.message || "error";
+    }
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+function fmt(secs) {
+  secs = Math.max(0, Math.floor(secs));
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m + ":" + (s < 10 ? "0" : "") + s;
+}
+
+// Decide which screen to show, based on whether the viewer has joined AND
+// whether the piece is in motion. Lobby is visible until the piece starts;
+// joining alone does NOT navigate away.
+//   not joined → lobby (always — even mid-piece, so they can still join)
+//   joined + idle → lobby (with "Joined as X" indicator)
+//   joined + counting-in or running → play screen
+function routeScreen(snap) {
+  const inMotion = !!(snap && (snap.countingIn || snap.started));
+  const showPlay = iAmJoined && inMotion;
+  $("screen-join").classList.toggle("hidden",  showPlay);
+  $("screen-play").classList.toggle("hidden", !showPlay);
+}
+
+function render(snap) {
+  lastSnap = snap;
+  routeScreen(snap);
+  // Roster — visible on join screen, regardless of whether viewer has joined.
+  renderRoster(snap.roster || []);
+  // Count-in banners shown on both screens whenever the count-in is active.
+  const inCountIn = !!snap.countingIn;
+  const ciSecs    = Math.max(0, Math.round((snap.countInRemainingMs || 0) / 1000));
+  const remSecs   = Math.max(0, Math.round((snap.remainingMs || 0) / 1000));
+  $("play-countin").classList.toggle("hidden", !inCountIn);
+  if (inCountIn) $("play-countin-num").textContent = ciSecs;
+
+  // Lobby banner reflects whichever phase is active. Hidden when idle.
+  const joinBanner = $("join-banner");
+  if (inCountIn) {
+    joinBanner.classList.remove("hidden");
+    $("join-banner-label").textContent = "starting in";
+    $("join-banner-num").textContent   = ciSecs;
+    $("join-banner-hint").textContent  = iAmJoined ? "" : "join now to play";
+  } else if (snap.started) {
+    joinBanner.classList.remove("hidden");
+    $("join-banner-label").textContent = "piece in progress";
+    $("join-banner-num").textContent   = fmt(remSecs);
+    $("join-banner-hint").textContent  = iAmJoined ? "" : "join now to play the rest";
+  } else {
+    joinBanner.classList.add("hidden");
+  }
+  // Start button on the join screen — disabled while running or counting in.
+  $("join-start-btn").disabled = snap.started || inCountIn;
+
+  // Countdown — count-in remaining if counting in, otherwise piece time.
+  const remaining = inCountIn
+    ? ciSecs
+    : Math.round((snap.remainingMs || 0) / 1000);
+  $("countdown").textContent = fmt(remaining);
+  $("status-line").textContent =
+    inCountIn ? "count-in" :
+    snap.started ? "in progress" :
+    (remaining === 0 && snap.you ? "piece complete" : "waiting for the piece to begin");
+
+  // Role buttons reflect current server-side role.
+  const you  = snap.you || { role: "idle", msInMusic: 0, msInDance: 0,
+                              msSinceChange: 0,
+                              notDancedWith: [], notPlayedWith: [],
+                              didMusicSolo: false, didDanceSolo: false };
+  const role = you.role;
+
+  // Pin the "in <role> for <m:ss>" counter so it ticks locally between snapshots.
+  sinceRole      = role;
+  sinceMsAtSnap  = you.msSinceChange || 0;
+  sinceSnapLocal = Date.now();
+  renderSince();
+  setBtn($("btn-music"), role === "music", "music");
+  setBtn($("btn-dance"), role === "dance", "dance");
+  $("btn-music").classList.toggle("off", role !== "music");
+  $("btn-dance").classList.toggle("off", role !== "dance");
+
+  // Coverage lists.
+  fillList("list-not-played",  you.notPlayedWith);
+  fillList("list-not-danced",  you.notDancedWith);
+
+  // Who still needs a solo — show music & dance side-by-side via badges.
+  const needsList = $("list-needs-solo");
+  needsList.innerHTML = "";
+  const needs = {};
+  (snap.needsMusicSolo || []).forEach(n => { needs[n] = needs[n] || {}; needs[n].music = true; });
+  (snap.needsDanceSolo || []).forEach(n => { needs[n] = needs[n] || {}; needs[n].dance = true; });
+  const keys = Object.keys(needs);
+  if (keys.length === 0) {
+    const li = document.createElement("li"); li.className = "empty";
+    li.textContent = "everyone has soloed";
+    needsList.appendChild(li);
+  } else {
+    keys.forEach(n => {
+      const li = document.createElement("li");
+      li.textContent = n;
+      if (needs[n].music) {
+        const b = document.createElement("span"); b.className = "badge music"; b.textContent = "music"; li.appendChild(b);
+      }
+      if (needs[n].dance) {
+        const b = document.createElement("span"); b.className = "badge dance"; b.textContent = "dance"; li.appendChild(b);
+      }
+      needsList.appendChild(li);
+    });
+  }
+
+  // Stats.
+  $("stat-music").textContent = fmt(you.msInMusic / 1000);
+  $("stat-dance").textContent = fmt(you.msInDance / 1000);
+
+  // Footer roster summary.
+  const c = snap.currently || { music: [], dance: [], idle: [] };
+  $("footer-note").textContent =
+    `now: ${c.music.length} playing · ${c.dance.length} dancing · ${c.idle.length} resting · ${snap.roster.length} total`;
+}
+
+function setBtn(el, active, kind) {
+  if (active) {
+    el.classList.add(kind);
+    el.classList.remove("off");
+  } else {
+    el.classList.remove(kind);
+  }
+}
+
+function renderRoster(names) {
+  $("roster-count").textContent = names.length;
+  const wrap = $("roster-chips");
+  wrap.innerHTML = "";
+  if (names.length === 0) {
+    const d = document.createElement("div");
+    d.className = "roster-empty";
+    d.textContent = "no one yet — be the first";
+    wrap.appendChild(d);
+    return;
+  }
+  names.forEach(n => {
+    const c = document.createElement("span");
+    c.className = "chip" + (n === myName ? " me" : "");
+    c.textContent = n;
+    wrap.appendChild(c);
+  });
+}
+
+function renderSince() {
+  const elapsed = sinceMsAtSnap + (Date.now() - sinceSnapLocal);
+  $("since-time").textContent = fmt(elapsed / 1000);
+  $("since-role").textContent = sinceRole;
+  const el = $("since-line");
+  el.classList.remove("music", "dance");
+  if (sinceRole === "music") el.classList.add("music");
+  if (sinceRole === "dance") el.classList.add("dance");
+}
+
+setInterval(renderSince, 1000);
+
+function fillList(id, names) {
+  const ul = $(id); ul.innerHTML = "";
+  if (!names || names.length === 0) {
+    const li = document.createElement("li"); li.className = "empty";
+    li.textContent = "—";
+    ul.appendChild(li);
+    return;
+  }
+  names.forEach(n => {
+    const li = document.createElement("li"); li.textContent = n; ul.appendChild(li);
+  });
+}
+
+// — wire join screen —
+$("join-btn").addEventListener("click", () => {
+  const name = ($("name-input").value || "").trim();
+  if (!name) { $("join-status").textContent = "name required"; return; }
+  myName = name;
+  send({ type: "join", name });
+});
+$("name-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("join-btn").click();
+});
+
+// Start button on the join screen — fires the count-in from any device.
+$("join-start-btn").addEventListener("click", () => send({ type: "start" }));
+
+// — wire role buttons —
+$("btn-music").addEventListener("click", () => send({ type: "role", name: myName, role: "music" }));
+$("btn-dance").addEventListener("click", () => send({ type: "role", name: myName, role: "dance" }));
+$("btn-idle").addEventListener("click",  () => send({ type: "role", name: myName, role: "idle"  }));
+
+// No localStorage / sessionStorage: a fresh page load means a fresh name.
+// `myName` lives only in this script's memory so the WS-reconnect path
+// (phone sleeps briefly, socket drops) can still auto-rejoin without
+// asking the user to retype. Hard refresh = clean slate, by design.
+// Also defensively clear any pre-existing entry from older builds:
+try { localStorage.removeItem("immer.name"); } catch (_) {}
+
+connect();
+</script>
+</body>
+</html>
