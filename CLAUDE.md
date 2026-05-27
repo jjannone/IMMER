@@ -51,6 +51,29 @@ is its own UI for the conductor at performance time. Visual clutter is
 genuine friction during a piece — every hidden cable is one less line in
 the eye when something goes wrong on stage.
 
+### Node-for-Max: state that must survive a hot restart belongs in the script, not in the patch's loadbang chain
+
+`node.script @watch 1` (and `@restart 1`) re-execs the script every time
+the file changes. The script's in-memory state resets to whatever its
+initial literals say — but **loadbang doesn't re-fire from the patch
+side**. Anything the patch seeded once via loadbang (a cloud URL, a
+piece slug, an OSC host, a database path) silently disappears on the
+next save and the operator sees a "looks correctly configured but
+behaves as if blank" symptom.
+
+This bit IMMER v2: cloud defaults lived only in the patch's loadbang
+chain. Every time `server.js` was saved, `cloudCfg.url` reset to `""`,
+and pressing Cloud connect produced `set cloud URL first` even though
+the patch UI showed nothing wrong.
+
+**Rule of thumb:** bake fixed configuration into the script's literal
+defaults. Use patch-side messages for *user-driven changes during the
+session* — values an operator types into a textedit or number box at
+performance time — not for shipping defaults. If you want belt-and-
+suspenders, keep both: script-side defaults AND a loadbang chain. They
+won't conflict because the loadbang messages just re-assert the same
+values on fresh load.
+
 ### Textedit's left outlet emits `text <symbol>` by default — don't capture with `$1`
 
 Wiring `[textedit] → [setfoo $1] → [node.script]` looks right and silently
