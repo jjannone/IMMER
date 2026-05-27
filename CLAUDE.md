@@ -51,6 +51,39 @@ is its own UI for the conductor at performance time. Visual clutter is
 genuine friction during a piece — every hidden cable is one less line in
 the eye when something goes wrong on stage.
 
+### Textedit's left outlet emits `text <symbol>` by default — don't capture with `$1`
+
+Wiring `[textedit] → [setfoo $1] → [node.script]` looks right and silently
+does the wrong thing. By default `textedit` has `@outputmode 0` ("output as
+messages"), which means typing `wss://example.com` and pressing return
+emits the **list** `text wss://example.com` from its left outlet. `$1` in
+the downstream message box captures the first atom — the literal symbol
+`text` — and the actual value is lost. There's no error. The handler runs
+with the wrong argument and the patch silently misbehaves.
+
+This bit IMMER v2 once already: the cloud config textedit fed
+`[setcloudurl $1]`, which stored `cloudCfg.url = "text"`, which produced
+`buildCloudWsUrl() = "text/mu/immer_v2/main/host"` — `Invalid URL`.
+
+Three valid fixes; pick whichever matches the situation:
+
+- **Set `outputmode 1` on the textedit.** Output becomes a bare symbol;
+  `$1` works as expected. Cleanest when the user is *meant* to edit the
+  value at runtime.
+- **`[route text]` between the textedit and the consumer.** Strips the
+  `text` prefix and forwards the remainder. Useful when you can't change
+  the textedit's attribute (e.g. you didn't author it).
+- **Skip the textedit entirely and bake the value into a message fired
+  by loadbang.** Right answer when the value is fixed configuration the
+  user shouldn't be re-typing at performance time. This is what IMMER
+  v2's `obj-def-cloudurl` / `obj-def-sitebase` / `obj-def-piece` /
+  `obj-def-room` messages do.
+
+The general principle: any Max object whose default output is a *list*
+(not a bare value) silently breaks `$1`-style capture. Verify the output
+format from the refpage before wiring `$N` against it — same discipline
+as the "never write attribute names from memory" rule.
+
 ### Don't conclude a Max attribute "doesn't exist" from a truncated grep
 
 When verifying whether an attribute or message exists on a Max object,
