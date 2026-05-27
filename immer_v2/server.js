@@ -769,6 +769,9 @@ Max.addHandler("setport", (p) => {
   Max.post(`port set to ${port} — restarting server`);
   stopServer();
   startServer();
+  // Re-announce the new LAN URL to the relay so /lan/<piece>/<room> stays
+  // accurate. No-op if cloud isn't connected.
+  announceLanUrl();
 });
 
 Max.addHandler("start",  () => beginCountIn());
@@ -859,6 +862,11 @@ function cloudConnect() {
     cloudReady = true;
     emitCloudConnected(true);
     emitCloudStatus(`cloud host live — ${cloudCfg.piece}:${cloudCfg.room}`);
+    // Announce our current LAN URL to the relay so a static page can
+    // build a "Local mode" link without knowing the laptop's IP. The
+    // relay stores this in the DO and redirects /lan/<piece>/<room>
+    // GET requests to it. Re-sent on setport (see announceLanUrl).
+    announceLanUrl();
     // Push the current snapshot immediately so any waiting remote
     // performers hear about us as soon as we attach.
     broadcastSnapshot();
@@ -880,6 +888,15 @@ function cloudConnect() {
     emitCloudStatus(`cloud error: ${err.message || err}`);
     // `close` fires after — let it handle the reconnect.
   });
+}
+
+// Send the current http://<lan-ip>:<port>/ to the relay, where it's stored
+// per-room and served to any GET /lan/<piece>/<room> request as a 302.
+// Safe to call when not connected (no-op then) — called from sock.on("open")
+// and from setport after a successful restart.
+function announceLanUrl() {
+  if (!cloudWs || !cloudReady) return;
+  try { cloudWs.send(JSON.stringify({ type: "host-info", lanUrl: publicUrl() })); } catch (_) {}
 }
 
 function cloudDisconnect(silent) {
