@@ -292,17 +292,18 @@ function broadcastSnapshot() {
       sendTo(ws, snapshotFor(wsToName.get(ws) || null));
     });
   }
-  // Cloud-side: send a personalized snapshot to each connected remote
-  // performer (directed by `to`), and a generic perform-scope snapshot for
-  // unjoined cloud lobby viewers. Same rationale as the wss.clients iteration
-  // above — a remote phone that opened the URL but hasn't typed a name yet
-  // still needs roster updates.
+  // Cloud-side: send a generic perform-scope snapshot first so unjoined
+  // cloud viewers (phones that opened the URL but haven't typed a name
+  // yet) see the current roster; THEN send a personalized snapshot per
+  // joined remote so their `you` field overwrites the generic one. Order
+  // matters — the generic broadcast hits joined remotes too and would
+  // otherwise clobber `you`.
   if (cloudWs && cloudReady) {
+    try { cloudWs.send(JSON.stringify(Object.assign({ toRole: "perform" }, snapshotFor(null)))); } catch (_) {}
     performers.forEach(p => {
       if (p.kind !== "remote") return;
       try { cloudWs.send(JSON.stringify(Object.assign({ to: p.name }, snapshotFor(p.name)))); } catch (_) {}
     });
-    try { cloudWs.send(JSON.stringify(Object.assign({ toRole: "perform" }, snapshotFor(null)))); } catch (_) {}
   }
 }
 
@@ -926,12 +927,22 @@ function handleCloudInbound(msg) {
     return;
   }
   if (msg.type === "mu-presence") {
-    // A relay-side perform socket closed. Disconnect (don't remove) the
-    // matching performer so their accumulated state survives — same rule
-    // as a LAN ws close.
+    if (msg.event === "join" && msg.role === "perform") {
+      // A fresh perform socket attached at the relay (no name yet —
+      // that arrives when the client sends {type:"join"}). Push the
+      // current snapshot so an unjoined phone sees the live roster
+      // instead of staring at an empty "Already joined" list until
+      // someone else triggers a state change.
+      broadcastSnapshot();
+      return;
+    }
     if (msg.event === "leave" && msg.role === "perform" && msg.name) {
+      // A relay-side perform socket closed. Disconnect (don't remove)
+      // the matching performer so their accumulated state survives —
+      // same rule as a LAN ws close.
       const p = performers.get(msg.name);
       if (p && p.kind === "remote") disconnectPerformer(msg.name);
+      broadcastSnapshot();
     }
     return;
   }
@@ -959,17 +970,20 @@ function handleRemotePerformInbound(msg) {
     Max.outlet("performer", "role", name, p.role);
     sendRoster();
     sendCoverage();
-    // Personalized acknowledgement back through the relay.
+    // `joined` ack the client uses to switch out of the name-entry state.
+    // The personalized snapshot (with `you`) is sent by broadcastSnapshot
+    // below, so we don't duplicate it here.
     if (cloudWs && cloudReady) {
       try { cloudWs.send(JSON.stringify({ to: name, type: "joined", name })); } catch (_) {}
-      try { cloudWs.send(JSON.stringify(Object.assign({ to: name }, snapshotFor(name)))); } catch (_) {}
     }
-    return;
+    // Fall through to the broadcastSnapshot at the bottom so every other
+    // client (LAN + cloud) sees the new roster — same as the LAN join
+    // path in handleClientMessage.
   }
 
-  if (!performers.has(name)) return;
+  else if (!performers.has(name)) return;
 
-  if (msg.type === "role") {
+  else if (msg.type === "role") {
     if (!started) return;
     const role = String(msg.role || "").trim();
     setRole(name, role === "music" ? ROLES.MUSIC : role === "dance" ? ROLES.DANCE : ROLES.IDLE);
