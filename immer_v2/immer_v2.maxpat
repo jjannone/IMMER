@@ -846,7 +846,7 @@
           ],
           "patching_rect": [
             20.0,
-            620.0,
+            540,
             600.0,
             280.0
           ],
@@ -896,8 +896,10 @@
           "id": "obj-defaults",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 6,
+          "numoutlets": 8,
           "outlettype": [
+            "bang",
+            "bang",
             "bang",
             "bang",
             "bang",
@@ -911,7 +913,7 @@
             130.0,
             22.0
           ],
-          "text": "t b b b b b b"
+          "text": "t b b b b b b b b"
         }
       },
       {
@@ -1182,8 +1184,8 @@
             "int"
           ],
           "patching_rect": [
-            160.0,
-            530.0,
+            310,
+            450,
             24.0,
             24.0
           ],
@@ -1197,8 +1199,8 @@
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
-            20.0,
-            532.0,
+            340,
+            454,
             130.0,
             20.0
           ],
@@ -1231,8 +1233,8 @@
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
-            220.0,
-            558.0,
+            120,
+            484,
             400.0,
             20.0
           ],
@@ -1246,8 +1248,8 @@
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
-            20.0,
-            558.0,
+            20,
+            484,
             200.0,
             20.0
           ],
@@ -1280,8 +1282,8 @@
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
-            220.0,
-            586.0,
+            120,
+            510,
             600.0,
             20.0
           ],
@@ -1295,8 +1297,8 @@
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
-            20.0,
-            586.0,
+            20,
+            510,
             200.0,
             20.0
           ],
@@ -1310,236 +1312,12 @@
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
-            20.0,
-            420.0,
+            20,
+            420,
             600.0,
             20.0
           ],
           "text": "\u2500\u2500 CLOUD (optional internet relay for remote performers) \u2500\u2500"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-lbl-piece",
-          "maxclass": "comment",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            20.0,
-            446.0,
-            60.0,
-            20.0
-          ],
-          "text": "Piece"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-te-piece",
-          "maxclass": "textedit",
-          "numinlets": 1,
-          "numoutlets": 4,
-          "outlettype": [
-            "",
-            "int",
-            "",
-            ""
-          ],
-          "patching_rect": [
-            90.0,
-            446.0,
-            120.0,
-            22.0
-          ],
-          "parameter_enable": 0,
-          "text": "immer_v2"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-msg-setpiece",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1140.0,
-            446.0,
-            140.0,
-            22.0
-          ],
-          "hidden": 1,
-          "text": "setpiece $1"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-lbl-room",
-          "maxclass": "comment",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            230.0,
-            446.0,
-            60.0,
-            20.0
-          ],
-          "text": "Room"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-te-room",
-          "maxclass": "textedit",
-          "numinlets": 1,
-          "numoutlets": 4,
-          "outlettype": [
-            "",
-            "int",
-            "",
-            ""
-          ],
-          "patching_rect": [
-            300.0,
-            446.0,
-            120.0,
-            22.0
-          ],
-          "parameter_enable": 0,
-          "text": "main"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-msg-setroom",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1140.0,
-            472.0,
-            140.0,
-            22.0
-          ],
-          "hidden": 1,
-          "text": "setroom $1"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-lbl-cloudurl",
-          "maxclass": "comment",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            20.0,
-            474.0,
-            90.0,
-            20.0
-          ],
-          "text": "Cloud URL"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-te-cloudurl",
-          "maxclass": "textedit",
-          "numinlets": 1,
-          "numoutlets": 4,
-          "outlettype": [
-            "",
-            "int",
-            "",
-            ""
-          ],
-          "patching_rect": [
-            120.0,
-            474.0,
-            500.0,
-            22.0
-          ],
-          "parameter_enable": 0,
-          "text": "wss://mu-relay.jannone-544.workers.dev"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-msg-setcloudurl",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1140.0,
-            498.0,
-            200.0,
-            22.0
-          ],
-          "hidden": 1,
-          "text": "setcloudurl $1"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-lbl-sitebase",
-          "maxclass": "comment",
-          "numinlets": 1,
-          "numoutlets": 0,
-          "patching_rect": [
-            20.0,
-            502.0,
-            90.0,
-            20.0
-          ],
-          "text": "Site base"
-        }
-      },
-      {
-        "box": {
-          "id": "obj-te-sitebase",
-          "maxclass": "textedit",
-          "numinlets": 1,
-          "numoutlets": 4,
-          "outlettype": [
-            "",
-            "int",
-            "",
-            ""
-          ],
-          "patching_rect": [
-            120.0,
-            502.0,
-            500.0,
-            22.0
-          ],
-          "parameter_enable": 0,
-          "text": ""
-        }
-      },
-      {
-        "box": {
-          "id": "obj-msg-setsitebase",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1140.0,
-            524.0,
-            220.0,
-            22.0
-          ],
-          "hidden": 1,
-          "text": "setsitebase $1"
         }
       },
       {
@@ -1552,8 +1330,8 @@
             "bang"
           ],
           "patching_rect": [
-            200.0,
-            528.0,
+            20,
+            450,
             24.0,
             24.0
           ]
@@ -1566,8 +1344,8 @@
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
-            228.0,
-            532.0,
+            48,
+            454,
             90.0,
             20.0
           ],
@@ -1603,8 +1381,8 @@
             "bang"
           ],
           "patching_rect": [
-            340.0,
-            528.0,
+            150,
+            450,
             24.0,
             24.0
           ]
@@ -1617,8 +1395,8 @@
           "numinlets": 1,
           "numoutlets": 0,
           "patching_rect": [
-            368.0,
-            532.0,
+            178,
+            454,
             110.0,
             20.0
           ],
@@ -1680,6 +1458,44 @@
           ],
           "hidden": 1,
           "text": "setroom main"
+        }
+      },
+      {
+        "box": {
+          "id": "obj-def-cloudurl",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "outlettype": [
+            ""
+          ],
+          "patching_rect": [
+            880.0,
+            230.0,
+            380.0,
+            22.0
+          ],
+          "hidden": 1,
+          "text": "setcloudurl wss://mu-relay.jannone-544.workers.dev"
+        }
+      },
+      {
+        "box": {
+          "id": "obj-def-sitebase",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "outlettype": [
+            ""
+          ],
+          "patching_rect": [
+            880.0,
+            256.0,
+            360.0,
+            22.0
+          ],
+          "hidden": 1,
+          "text": "setsitebase https://john.jann.one/immer_v2/"
         }
       }
     ],
@@ -2220,110 +2036,6 @@
       {
         "patchline": {
           "destination": [
-            "obj-msg-setpiece",
-            0
-          ],
-          "hidden": 1,
-          "source": [
-            "obj-te-piece",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
-            "obj-nodescript",
-            0
-          ],
-          "hidden": 1,
-          "source": [
-            "obj-msg-setpiece",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
-            "obj-msg-setroom",
-            0
-          ],
-          "hidden": 1,
-          "source": [
-            "obj-te-room",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
-            "obj-nodescript",
-            0
-          ],
-          "hidden": 1,
-          "source": [
-            "obj-msg-setroom",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
-            "obj-msg-setcloudurl",
-            0
-          ],
-          "hidden": 1,
-          "source": [
-            "obj-te-cloudurl",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
-            "obj-nodescript",
-            0
-          ],
-          "hidden": 1,
-          "source": [
-            "obj-msg-setcloudurl",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
-            "obj-msg-setsitebase",
-            0
-          ],
-          "hidden": 1,
-          "source": [
-            "obj-te-sitebase",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
-            "obj-nodescript",
-            0
-          ],
-          "hidden": 1,
-          "source": [
-            "obj-msg-setsitebase",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
             "obj-msg-cloudon",
             0
           ],
@@ -2421,6 +2133,58 @@
           "hidden": 1,
           "source": [
             "obj-def-room",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "destination": [
+            "obj-def-cloudurl",
+            0
+          ],
+          "hidden": 1,
+          "source": [
+            "obj-defaults",
+            6
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "destination": [
+            "obj-def-sitebase",
+            0
+          ],
+          "hidden": 1,
+          "source": [
+            "obj-defaults",
+            7
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "destination": [
+            "obj-nodescript",
+            0
+          ],
+          "hidden": 1,
+          "source": [
+            "obj-def-cloudurl",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "destination": [
+            "obj-nodescript",
+            0
+          ],
+          "hidden": 1,
+          "source": [
+            "obj-def-sitebase",
             0
           ]
         }
