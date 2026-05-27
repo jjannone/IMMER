@@ -816,16 +816,17 @@ let cloudReady       = false;
 let cloudReconnTimer = null;
 let cloudClosing     = false; // distinguish user-requested disconnect from drops
 
+// Defaults baked here, not in the patch's loadbang chain, because
+// node.script may @restart (via @watch 1, or any edit-and-save of this
+// file) AFTER loadbang has already fired — in which case the patch
+// wouldn't re-seed these and the operator would see "set cloud URL
+// first" when pressing Cloud connect. Hardcoding here means fresh-load
+// timing and hot-restart both end up with the same config.
 const cloudCfg = {
-  url:   "",                                  // wss://mu-relay.<sub>.workers.dev
-  piece: "immer_v2",
-  room:  "main",
-  // Static-site base where the v2 client (public/index.html) is hosted.
-  // Empty by default — v2 doesn't ship a hosted static mirror. The patch
-  // shows a placeholder; the operator can paste their own host if they
-  // host the client somewhere (e.g. a Cloudflare tunnel pointing at the
-  // LAN server's HTTP port).
-  siteBase: ""
+  url:      "wss://mu-relay.jannone-544.workers.dev",
+  piece:    "immer_v2",
+  room:     "main",
+  siteBase: "https://john.jann.one/immer_v2/"
 };
 
 function emitCloudStatus(text)    { Max.outlet("cloud", "status", text); }
