@@ -107,6 +107,62 @@ The general principle: any Max object whose default output is a *list*
 format from the refpage before wiring `$N` against it — same discipline
 as the "never write attribute names from memory" rule.
 
+### v2 cloud bridge — what survives reading the code, and what doesn't
+
+`immer_v2/` adds a second transport alongside the LAN server: an
+outbound WebSocket from the patch's `node.script` to the shared
+`mu-relay` Cloudflare Worker (`wss://mu-relay.jannone-544.workers.dev`),
+keyed by piece slug `immer_v2` and room `main`. LAN and cloud
+performers share the same `performers` map; `kind: "lan" | "remote"`
+distinguishes them. The bridge is documented in
+`immer_v2/server.js`'s "cloud bridge" block and in
+`multi-user-template/cloud/worker/`. These lessons are the ones a
+reading of that code WON'T surface on its own.
+
+**Broadcast ordering — generic first, per-name second.** In
+`broadcastSnapshot`, send `{toRole:"perform", ...snapshot}` BEFORE the
+per-performer `{to:<name>, ...snapshot}` loop. Reverse that order and
+the generic broadcast arrives second on a joined remote's socket,
+clobbering the `you` field that the personalized snapshot just set.
+Verified the hard way once. The pattern is the inverse of "send
+specific then general"; here the specific arrives last so it wins.
+
+**Per-performer reset belongs in `beginCountIn`, not `actuallyStartPiece`.**
+The play screen renders during count-in (`countingIn || started`), so
+role buttons are visible there. If the reset fires at
+`actuallyStartPiece`, any role staked during count-in gets wiped the
+instant the piece begins — buttons "work" then visibly revert to idle.
+Reset at the start of count-in instead, and don't touch roles in
+`actuallyStartPiece`. `accumulateTime` is already a no-op while
+`!started`, so no time accrues prematurely.
+
+**Hold-in-progress visual state is server-derived; reverting is automatic.**
+For a counter-driven UI signal — pair-hold accumulators (`pairMusicMs`,
+`pairDanceMs`) and the solo-hold (`soloMusicMs` / `soloDanceMs`) — don't
+mirror state on the client and try to remember when to revert. Expose
+the active accumulators in every snapshot (`pairingMusic`, `pairingDance`
+in `you`; top-level `soloingMusic` / `soloingDance`), let the client
+re-apply the highlight class on each render, and the *absence* of the
+name in the next snapshot drops the class. The "revert on hold break"
+behavior falls out of the snapshot pipeline without any client-side
+state machine.
+
+**`/lan/<piece>/<room>` is the relay's redirect endpoint, fed by
+`host-info`.** When the patch's `cloudConnect` opens its outbound WS,
+it sends `{type:"host-info", lanUrl: publicUrl()}` to the relay. The
+relay stores that in the DO and serves it as a 302 redirect from
+`GET /lan/<piece>/<room>`. This is how the "Local mode" button on
+`john.jann.one` resolves to the laptop's *current* IP without the
+static page knowing it. Re-send `host-info` whenever the LAN URL
+changes (e.g. on `setport`).
+
+**Node-for-Max `@watch 1` resets script-side state but not patch
+state.** Hardcode fixed cloud config in `cloudCfg`'s literal in
+`server.js`, not just in patch-side loadbang messages. The loadbang
+chain fires once on patch open; node.script can hot-restart any number
+of times after that. Tested: editing and saving `server.js` while the
+patch is open wipes `cloudCfg` to whatever the literal says.
+
 ### Don't conclude a Max attribute "doesn't exist" from a truncated grep
 
 When verifying whether an attribute or message exists on a Max object,
