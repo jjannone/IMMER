@@ -256,10 +256,12 @@ function handleClientMessage(ws, msg) {
     sendTo(ws, { type: "joined", name });
   }
   else if (msg.type === "role") {
+    // Role changes are allowed during count-in too — performers stake
+    // out their starting role before the piece begins. accumulateTime
+    // doesn't tick until `started`, so no early time accumulates.
     const name = String(msg.name || "").trim();
     const role = String(msg.role || "").trim();
     if (!performers.has(name)) return;
-    if (!started) return; // role changes only count once the piece has started
     setRole(name, role === "music" ? ROLES.MUSIC : role === "dance" ? ROLES.DANCE : ROLES.IDLE);
   }
   else if (msg.type === "leave") {
@@ -584,9 +586,29 @@ function fmtMS(ms) {
 
 function beginCountIn() {
   if (countingIn || started) return;
+  // Reset per-performer state at the START of count-in (not at
+  // actuallyStartPiece), so role buttons clicked during count-in
+  // actually stake a starting role for the piece instead of being
+  // wiped the moment the piece begins. Accumulators stay zero until
+  // started=true — accumulateTime is a no-op until then.
+  const now = Date.now();
+  performers.forEach(p => {
+    p.role           = ROLES.IDLE;
+    p.msInMusic      = 0;
+    p.msInDance      = 0;
+    p.lastRoleChange = now;
+    p.soloMusicMs    = 0;
+    p.soloDanceMs    = 0;
+    p.pairMusicMs    = {};
+    p.pairDanceMs    = {};
+    p.dancedWith     = new Set();
+    p.playedWith     = new Set();
+    p.didMusicSolo   = false;
+    p.didDanceSolo   = false;
+  });
   if (cfg.countInMs <= 0) { actuallyStartPiece(); return; }
   countingIn    = true;
-  countInEndsAt = Date.now() + cfg.countInMs;
+  countInEndsAt = now + cfg.countInMs;
   Max.outlet("status", `Count-in — ${Math.round(cfg.countInMs / 1000)}s`);
   Max.outlet("countdown", Math.round(cfg.countInMs / 1000));
   broadcastSnapshot();
@@ -598,21 +620,9 @@ function actuallyStartPiece() {
   startedAt  = Date.now();
   endsAt     = startedAt + cfg.durationMs;
   lastTick   = startedAt;
-  // Reset role-time + solo + pair accumulators so a fresh run is clean.
-  performers.forEach(p => {
-    p.role           = ROLES.IDLE;
-    p.msInMusic      = 0;
-    p.msInDance      = 0;
-    p.lastRoleChange = startedAt;
-    p.soloMusicMs    = 0;
-    p.soloDanceMs    = 0;
-    p.pairMusicMs    = {};
-    p.pairDanceMs    = {};
-    p.dancedWith     = new Set();
-    p.playedWith     = new Set();
-    p.didMusicSolo   = false;
-    p.didDanceSolo   = false;
-  });
+  // Roles + accumulators were already reset by beginCountIn; whatever
+  // role each performer is currently in (if anything) is now their
+  // starting role for the live piece.
   Max.outlet("status", `Started — ${Math.round(cfg.durationMs/1000)}s, ${performers.size} performers`);
   Max.outlet("countdown", Math.round(cfg.durationMs / 1000));
   broadcastSnapshot();
@@ -984,7 +994,8 @@ function handleRemotePerformInbound(msg) {
   else if (!performers.has(name)) return;
 
   else if (msg.type === "role") {
-    if (!started) return;
+    // Role changes allowed during count-in too — same rationale as the
+    // LAN handler. accumulateTime is a no-op until `started`.
     const role = String(msg.role || "").trim();
     setRole(name, role === "music" ? ROLES.MUSIC : role === "dance" ? ROLES.DANCE : ROLES.IDLE);
   } else if (msg.type === "leave") {
