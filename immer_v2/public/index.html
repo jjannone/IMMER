@@ -629,8 +629,11 @@ function render(snap) {
     ? ciSecs
     : Math.round((snap.remainingMs || 0) / 1000);
   $("countdown").textContent = fmt(remaining);
+  // Status text — make the count-in affordance explicit so performers
+  // know the role buttons are live for pre-staking. Watchers see a
+  // simpler version (no instruction since they have no buttons).
   $("status-line").textContent =
-    inCountIn ? "count-in" :
+    inCountIn ? (iAmWatching && !iAmJoined ? "count-in — get ready" : "count-in — choose your starting role") :
     snap.started ? "in progress" :
     (remaining === 0 && snap.you ? "piece complete" : "waiting for the piece to begin");
 
